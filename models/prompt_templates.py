@@ -207,7 +207,8 @@ def prompt_template_v6():
 
     **Question:** Will you be engaged with the next automated health message?
 
-    Please respond your final decision in the format: '##Yes##' for engagement or '##No##' for lack of engagement.
+    Please respond with your final decision in the format: '##Yes##' for engagement or '##No##' for lack of engagement.
+    Your response should only contain one of the following: '##Yes##' OR '##No##'. 
     """
 
 

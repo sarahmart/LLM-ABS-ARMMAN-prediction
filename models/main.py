@@ -10,17 +10,19 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, default="data/trajectories_continuous.json", help="Path to the data file.")
+    parser.add_argument("--num_arms", type=int, default=100, help="Number of mothers to simulate.")
     parser.add_argument("--prompt_version", type=int, default=6, help="Version of the prompt template to use.")
     parser.add_argument("--filter", type=bool, default=False, help="Whether to filter highly engaged arms.")
     parser.add_argument("--use_features", type=bool, default=True, help="Whether to use features in the prompt.")
-    parser.add_argument("--config_path", type=str, default="config_harvard.json", help="Path to the LLM API configuration file.")
+    parser.add_argument("--config_path", type=str, default="openai_config.json", help="Path to the LLM API configuration file.")
     parser.add_argument("--t1", type=int, default=10, help="Number of time steps to use as input.")
     parser.add_argument("--t2", type=int, default=5, help="Number of time steps to predict.")
 
     args = parser.parse_args()
 
-    # create the directory autoregressive with args t1 and t2
-    os.makedirs(f"autoregressive_{args.t1}_{args.t2}", exist_ok=True)
+    # create the directory : model_num_arms_t1_t2
+    model = args.config_path.split('_')[0]
+    os.makedirs(f"{model}_{args.num_arms}_{args.t1}_{args.t2}", exist_ok=True)
 
     engine = load_config(args.config_path)
 
@@ -38,7 +40,7 @@ if __name__ == "__main__":
                 filtered_action_trajectories.append(action_trajectories[i])
                 filtered_features.append(features[i])
                 count += 1
-            if count == 100:
+            if count == args.num_arms:
                 break
         
         state_trajectories = filtered_state_trajectories

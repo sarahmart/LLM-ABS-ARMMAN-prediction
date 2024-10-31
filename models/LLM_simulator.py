@@ -87,40 +87,75 @@ def load_config(config_path):
 #     return "error", None  # Return an error message if all attempts fail
 
 
-def gpt4_eval(config: dict, sys_prompt: str, user_prompt: str, max_retries: int = 10) -> int:
+def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_retries: int = 10) -> int:
     """Evaluate a prompt using the LLM model with retry logic for incorrect format."""
     
-    # Set the API key from the config using requests.post
-    headers = {
-        "Content-Type": "application/json",
-        "api-key": config["api_key"]
-    }
-
-    data = {
-        "model": config["model"],
+    # Model-dependent headers for the API request
+    if model == "openai":
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": config["api_key"]
+        }
+        data = {
+        "model": config["model"], 
         "messages": [
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": user_prompt}
         ],
         "temperature": 0.7,
         "max_tokens": 2048
-    }
+        }
+
+    elif model == "anthropic":
+        headers = {
+            "x-api-key": config["api_key"],
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        data = {
+            "modelId": config["model"],
+            "body": {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 2048,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text",
+                             "text": sys_prompt + user_prompt
+                            }
+                        ]
+                    }
+                ],
+                "temperature": 0.7,
+            }
+        }
+    
+    else:
+        raise ValueError("Specified model not supported.")
 
     for attempt in range(max_retries):
         try:
-            # Using OpenAI's Python client, but with flexibility from the config
             response = requests.post(config["api_url"], headers=headers, data=json.dumps(data))
 
             # Extracting the prediction
-            response_data = response.json()
-            prediction = response_data["choices"][0]["message"]["content"]
+            if response.status_code == 200:
+                response_data = response.json()
+                # print(response_data)
 
-            if "#Yes#" in prediction:
-                return 1, prediction  # Engaged
-            elif "#No#" in prediction:
-                return 0, prediction   # Not Engaged
-            else:
-                raise ValueError("Prediction does not follow the expected format.")
+                if model == "openai":
+                    prediction = response_data["choices"][0]["message"]["content"]
+                elif model == "anthropic":
+                    prediction = response_data["content"][0]["text"]
+
+                print(prediction)
+
+                if "#Yes#" in prediction:
+                    return 1, prediction  # Engaged
+                elif "#No#" in prediction:
+                    return 0, prediction   # Not Engaged
+                else:
+                    raise ValueError("Prediction does not follow the expected format.")
             
         except ValueError as ex:
             print(f"Extraction failed on attempt {attempt + 1}: {ex}")
@@ -160,7 +195,7 @@ def generate_prompt(mapped_features, prompt_template, t, args):
 
 
 def process_data(args, engine, features, state_trajectories, action_trajectories, prompt_template, sys_prompt, num_queries=5):
-    num_arms = 100  # Adjust according to your data
+    """Process the data and compute errors for the autoregressive prediction model."""
 
     all_binary_predictions = [[] for _ in range(args.t2)]  # To store binary predictions for t2 steps
     all_ground_truths = [[] for _ in range(args.t2)]
@@ -171,7 +206,7 @@ def process_data(args, engine, features, state_trajectories, action_trajectories
 
     structured_results = {}
 
-    for arm in tqdm(range(num_arms), desc="Processing arms"):
+    for arm in tqdm(range(args.num_arms), desc="Processing arms"):
         structured_results[arm] = {}
         arm_features = features[arm]
 
@@ -196,7 +231,7 @@ def process_data(args, engine, features, state_trajectories, action_trajectories
 
             # Query the LLM and predict the next time step's engagement
             for _ in range(num_queries):
-                engagement_prediction, response = gpt4_eval(engine, sys_prompt, prompt)
+                engagement_prediction, response = LLM_eval(engine, args.config_path.split('_')[0], sys_prompt, prompt)
 
                 if engagement_prediction == "error":
                     extraction_failures += 1
