@@ -1,2 +1,3 @@
 *_config.json
-trajectories_continous.json
+data/trajectories_continous.json
+results/
