@@ -39,7 +39,7 @@ def data_preprocessing(data_path, groups=['control']):
     return features, state_trajectories, action_trajectories
 
 
-def map_features_to_prompt(features, past_listening_times, past_actions):
+def map_features_to_prompt(features, past_listening_times, past_actions, first_week=False):
     """Map features to their corresponding categories and return a dictionary."""
     age_categories = ["<20", "20-24", "25-29", "30-34", "35+"]
     languages = ["Hindi", "Marathi", "Kannada", "Gujarati", "English"]
@@ -51,18 +51,25 @@ def map_features_to_prompt(features, past_listening_times, past_actions):
     income_brackets = ["0-5000", "5001-10000", "10001-15000", "15001-20000", "20001-25000", "25001-30000", "30000+"]
 
     def safe_index(slice, category_list):
-        try:
-            return category_list[slice.index(1)]
-        except ValueError:
-            return "Unknown"
+        # Check if the slice has elements and contains at least one 1
+        if len(slice) > 0 and 1 in slice:
+            index = slice.index(1)  # Find the first occurrence of 1
+            if index < len(category_list):  # Ensure the index exists in the category_list
+                return category_list[index]
+            else:
+                return "Unknown"  # Index is out of bounds for the category_list
+        else:
+            return "Unknown"  # Slice is empty or does not contain a 1
 
-    # Modify past behavior to show "Engaged" or "Not Engaged" based on past listening times
-    past_behavior = "\n".join(
-        [f"  - Week {i+1}: {'Engaged' if time > 30 else 'Not Engaged'}, Action: {'Received service call' if action == 1 else 'No service call'}"
-         for i, (time, action) in enumerate(zip(past_listening_times, past_actions))]
-    )
 
-    mapped_features = {
+    if not first_week:
+
+        # Modify past behavior to show "Engaged" or "Not Engaged" based on past listening times
+        past_behavior = "\n".join(
+            [f"  - Month {i+1}: {'Engaged' if time > 30 else 'Not Engaged'}, Action: {'Received service call' if action == 1 else 'No service call'}"
+            for i, (time, action) in enumerate(zip(past_listening_times, past_actions))]
+        )
+        mapped_features = {
         "enroll_gest_age": features[0],
         "enroll_delivery_status": "pregnant" if features[1] == 0 else "delivered",
         "g": features[2],
@@ -78,6 +85,24 @@ def map_features_to_prompt(features, past_listening_times, past_actions):
         "channel_type": safe_index(features[32:35], channel_types),
         "income_bracket": safe_index(features[35:], income_brackets),
         "past_behavior": past_behavior,
+    }
+
+    else:
+        mapped_features = {
+        "enroll_gest_age": features[0],
+        "enroll_delivery_status": "pregnant" if features[1] == 0 else "delivered",
+        "g": features[2],
+        "p": features[3],
+        "s": features[4],
+        "l": features[5],
+        "days_to_first_call": features[6],
+        "age_category": safe_index(features[7:12], age_categories),
+        "language": safe_index(features[12:16], languages),
+        "education_level": safe_index(features[16:23], education_levels),
+        "phone_owner": safe_index(features[23:26], phone_ownership),
+        "call_slot_preference": safe_index(features[26:32], call_slots),
+        "channel_type": safe_index(features[32:35], channel_types),
+        "income_bracket": safe_index(features[35:], income_brackets),
     }
 
     return mapped_features

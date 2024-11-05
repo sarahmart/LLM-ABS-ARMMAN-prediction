@@ -1,22 +1,17 @@
 import json
+import os
+import requests
+import time
 
 import numpy as np
 
 from datetime import datetime
+from sklearn.metrics import f1_score
+from tqdm import tqdm
 
 from preprocess import data_preprocessing, map_features_to_prompt
 from prompt_templates import *
 from metrics import *
-
-####
-
-import time
-import requests
-import re
-from scipy.special import logit, expit
-from tqdm import tqdm  # Import tqdm for progress bars
-from sklearn.metrics import f1_score
-####
 
 # TODO:
 ## autoregressive predictions
@@ -141,7 +136,6 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
             # Extracting the prediction
             if response.status_code == 200:
                 response_data = response.json()
-                # print(response_data)
 
                 if model == "openai":
                     prediction = response_data["choices"][0]["message"]["content"]
@@ -157,6 +151,11 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                 else:
                     raise ValueError("Prediction does not follow the expected format.")
             
+            else:
+                    print(f"API request failed with status {response.status_code}: {response.text}")
+                    time.sleep(2)  # Retry delay
+                    continue
+            
         except ValueError as ex:
             print(f"Extraction failed on attempt {attempt + 1}: {ex}")
             if attempt < max_retries - 1:
@@ -167,31 +166,21 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
             print(ex)
             time.sleep(3)
             continue  # Retry in case of other errors
-    
-    return "error"  # Return an error message if all attempts fail
+
+    # may not need to return None here, check 
+    return "error", None  # Return an error message if all attempts fail
 
 
-def generate_prompt(mapped_features, prompt_template, t, args):
+def generate_prompt(mapped_features, prompt_template):
     """Generate a prompt using the provided template, mapped features, and current time step t."""
-    
     # If t is 0, it's the starting week, so adjust the prompt accordingly
-    if t == 0:
-        if args.use_features:
-            starting_prompt = starting_prompt_v1()
-        else: # Use the template without features
-            starting_prompt = starting_prompt_v2()
-
-        return starting_prompt.format(**mapped_features)
-    
-    else:
-        # Use the regular template for time steps greater than 0
-        return prompt_template.format(**mapped_features)
+    return prompt_template.format(**mapped_features)
 
 
-# def logistic_growth(t, initial_mothers, L, k, t0):
-#     """Adjusted logistic growth model that starts with the initial number of mothers."""
-#     # Logistic growth model adds to the initial number of mothers
-#     return initial_mothers + (L - initial_mothers) / (1 + np.exp(-k * (t - t0)))
+def logistic_growth(t, initial_mothers, L, k, t0):
+    """Adjusted logistic growth model that starts with the initial number of mothers."""
+    # Logistic growth model adds to the initial number of mothers
+    return initial_mothers + (L - initial_mothers) / (1 + np.exp(-k * (t - t0)))
 
 
 def process_data(args, engine, features, state_trajectories, action_trajectories, prompt_template, sys_prompt, num_queries=5):
@@ -253,7 +242,7 @@ def process_data(args, engine, features, state_trajectories, action_trajectories
             ground_truth = state_trajectories[arm][t + args.t1]  # The ground truth engagement for the next step
             all_ground_truths[t].append(ground_truth)
 
-    with open(f"./autoregressive_{args.t1}_{args.t2}/engagement_structured_prompts_and_responses_{args.prompt_version}_filter_{str(args.filter)}_{timestamp}.json", "w") as json_file:
+    with open(f"./results/{args.config_path.split('_')[0]}_{args.num_arms}_{args.t1}_{args.t2}/engagement_structured_prompts_and_responses_{args.prompt_version}_filter_{str(args.filter)}_{timestamp}.json", "w") as json_file:
         json.dump(structured_results, json_file, indent=4)
 
     for t in range(args.t2):
@@ -280,3 +269,116 @@ def process_data(args, engine, features, state_trajectories, action_trajectories
     total_f1_score = f1_score(((total_ground_truths)>30).astype(int), (total_binary_predictions > 0.5).astype(int))
 
     return (all_ground_truths, all_binary_predictions, accuracy_per_step, log_likelihood_per_step, f1_score_per_step, total_accuracy, total_log_likelihood, total_f1_score, extraction_failures)
+
+
+def process_data_monthly_with_prompt_ensemble(args, config, features, state_trajectories, action_trajectories, sys_prompt, num_queries=5, initial_mothers=100, L=3000, k=0.4, t0=10):
+    # Use all prompt versions in the ensemble
+    prompt_templates = [bin_prompt_v1(), bin_prompt_v2(), bin_prompt_v3(), bin_prompt_v4(), bin_prompt_v5()] 
+    starting_prompt_templates = [starting_prompt_v2(), starting_prompt_v3(), starting_prompt_v4(), starting_prompt_v5(), starting_prompt_v6()]
+    
+    month_steps = [(0, 4), (4, 8), (8, 12), (12, 16), (16, 20), (20, 24), (24, 28), (28, 32), (32, 36), (36, 39)]
+    all_binary_predictions = [[] for _ in range(len(month_steps))]
+    all_ground_truths = [[] for _ in range(len(month_steps))]
+    all_individual_predictions = []  # Store all individual predictions
+    extraction_failures = 0
+    
+    structured_results = {}
+    registered_mothers = set()
+    mother_join_times = {}
+
+    ground_truths = []
+
+    # Loop through each month step, but only use LLM between t1 and t2
+    for m, (start, end) in tqdm(enumerate(month_steps), desc="Processing months"):
+        if m < args.t1:  # Simulate mother joining but skip LLM predictions
+            num_mothers = int(logistic_growth(m, initial_mothers, L, k, t0))
+
+            num_arms = num_mothers
+
+            new_mothers = set(range(len(registered_mothers), num_mothers))
+            registered_mothers.update(new_mothers)
+
+            for new_mother in new_mothers:
+                mother_join_times[new_mother] = m
+
+            continue  # Skip LLM predictions for months before t1
+
+        # From month t1 to t2, use LLM predictions
+        if args.t1 <= m <= args.t2:
+            num_mothers = int(logistic_growth(m, initial_mothers, L, k, t0))
+   
+            num_arms = num_mothers
+
+            new_mothers = set(range(len(registered_mothers), num_mothers))
+            registered_mothers.update(new_mothers)
+
+            for new_mother in new_mothers:
+                mother_join_times[new_mother] = m
+
+            structured_results[m] = {}
+            for arm in tqdm(range(num_arms), desc="Processing arms", leave=False):
+                structured_results[m][arm] = {"prompt": [], "responses": []}
+                
+                arm_features = features[arm]
+                join_time = mother_join_times.get(arm, float('inf'))
+                relative_month = m - join_time
+                
+                if relative_month < 0:
+                    continue
+
+                start_week_next_month = month_steps[relative_month][0]
+                end_week_next_month = month_steps[relative_month][1]
+
+                if relative_month == 0:
+                    mapped_features = map_features_to_prompt(arm_features, [], [], first_week=True)
+                    prompt_text = [generate_prompt(mapped_features, prompt_template) for prompt_template in starting_prompt_templates]
+                else:
+                    history_end_week = month_steps[relative_month-1][1]
+                    arm_states = state_trajectories[arm][:history_end_week]
+                    arm_actions = action_trajectories[arm][:history_end_week]
+                    
+                    mapped_features = map_features_to_prompt(arm_features, arm_states, arm_actions)
+                    prompt_text = [generate_prompt(mapped_features, prompt_template) for prompt_template in prompt_templates]
+
+                ground_truth = 1 if np.sum(np.array(state_trajectories[arm][start_week_next_month:end_week_next_month]) > 30) > 0 else 0
+                
+                ground_truths.append(ground_truth)
+                predictions = []
+                individual_predictions = []  # Store individual predictions for this arm and month
+                
+                for prompt in prompt_text:
+                    responses = []
+                    for _ in range(num_queries):
+                        engagement_prediction, response = LLM_eval(config, args.config_path.split('_')[0], sys_prompt, prompt)
+                        if engagement_prediction == "error":
+                            extraction_failures += 1
+                            engagement_prediction = 0
+                        responses.append(engagement_prediction)
+                    structured_results[m][arm]["responses"].append(response)
+                    predictions.append(np.mean(responses))  # Average responses for this prompt template
+                    individual_predictions.append(responses)  # Save individual predictions for each prompt
+
+                # Ensemble: Majority voting or averaging across prompt templates
+                final_engagement_prediction = np.mean(predictions)
+                all_binary_predictions[m].append(final_engagement_prediction)
+                all_ground_truths[m].append(ground_truth)
+                all_individual_predictions.append(individual_predictions)  # Save all individual predictions
+
+
+    model = args.config_path.split('_')[0]
+    os.makedirs(f"./results/{model}_{args.num_arms}", exist_ok=True)
+
+    # Save the individual predictions to JSON
+    with open(f"./results/{model}_{args.num_arms}/all_individual_predictions_t1_{args.t1}_t2_{args.t2}_{timestamp}.json", "w") as json_file:
+        json.dump(all_individual_predictions, json_file, indent=4)
+    
+    ## Save ground truths
+    with open(f"./results/{model}_{args.num_arms}/ground_truths_t1_{args.t1}_t2_{args.t2}_{timestamp}.json", "w") as json_file:
+        json.dump(ground_truths, json_file, indent=4)
+
+    # Save structured_results as JSON
+    with open(f"./results/{model}_{args.num_arms}/structured_results_t1_{args.t1}_t2_{args.t2}_{timestamp}.json", 'w') as f:
+        json.dump(structured_results, f, indent=4)
+
+    # Save results and return
+    return (all_ground_truths, all_binary_predictions, extraction_failures)
