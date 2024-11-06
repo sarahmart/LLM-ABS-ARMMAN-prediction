@@ -117,7 +117,8 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                         "role": "user",
                         "content": [
                             {"type": "text",
-                             "text": sys_prompt + user_prompt
+                             "text": "Answer the following question concisely with either '##Yes##' OR '##No##' and avoid extra details." +
+                             sys_prompt + user_prompt
                             }
                         ]
                     }
@@ -125,6 +126,24 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                 "temperature": 0.7,
             }
         }
+
+    elif model == "meta":
+        headers = {
+        "x-api-key": config["api_key"],
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+        }
+        data = {
+        "modelId": "meta.llama3-70b-instruct-v1:0",
+        "body": {
+            "prompt": f"""
+                Answer the following question concisely in English (no code) with either '##Yes##' OR '##No##' and avoid extra details.
+                {sys_prompt + user_prompt}
+            """,
+            "temperature": 0.7, 
+            # "top_p": 0.5            
+        }
+    }
     
     else:
         raise ValueError("Specified model not supported.")
@@ -133,7 +152,7 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
         try:
             response = requests.post(config["api_url"], headers=headers, data=json.dumps(data))
 
-            # Extracting the prediction
+            # Extract prediction
             if response.status_code == 200:
                 response_data = response.json()
 
@@ -141,10 +160,14 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                     prediction = response_data["choices"][0]["message"]["content"]
                 elif model == "anthropic":
                     prediction = response_data["content"][0]["text"]
+                elif model == "meta":
+                    prediction = response_data["generation"]
 
-                print(prediction)
+                # print(prediction)
 
-                if "#Yes#" in prediction:
+                if "#Yes#" in prediction and "#No#" in prediction:
+                    raise ValueError("Prediction not consistent.")
+                elif "#Yes#" in prediction:
                     return 1, prediction  # Engaged
                 elif "#No#" in prediction:
                     return 0, prediction   # Not Engaged
@@ -153,7 +176,7 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
             
             else:
                     print(f"API request failed with status {response.status_code}: {response.text}")
-                    time.sleep(2)  # Retry delay
+                    time.sleep(2) 
                     continue
             
         except ValueError as ex:
@@ -165,10 +188,10 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
         except Exception as ex:
             print(ex)
             time.sleep(3)
-            continue  # Retry in case of other errors
+            continue  
 
     # may not need to return None here, check 
-    return "error", None  # Return an error message if all attempts fail
+    return "error", None  # Return error if all attempts fail
 
 
 def generate_prompt(mapped_features, prompt_template):
