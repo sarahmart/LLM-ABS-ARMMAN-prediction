@@ -1,6 +1,7 @@
 # imports 
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 
 def plot_performance_vs_month(months, metric_llm, metric_nn, metric_agg, metric_avg, metric_name):
     """
