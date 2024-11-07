@@ -26,19 +26,19 @@ def plot_performance_vs_month(months, metric_llm, metric_nn, metric_agg, metric_
     plt.figure(figsize=(10, 6))
     
     # Plot LLM performance
-    plt.plot(months, metric_llm, label='LLM', marker='o')
+    plt.plot(months, metric_llm, label='LLM1', marker='o')
     
-    # Plot NN performance, but skip the first two months (since NN is None there)
+    # Plot NN performance
     if any(metric_nn):
-        plt.plot(months[2:], metric_nn[2:], label='Two-stage', marker='o')
+        plt.plot(months, metric_nn, label='LLM2', marker='o')
 
-    # Plot Direct Averaging performance, but skip the first two months (since Direct Averaging is None there)
+    # Plot Direct Averaging performance
     if any(metric_avg):
-        plt.plot(months[2:], metric_avg[2:], label='Posterior', marker='o')
+        plt.plot(months, metric_avg, label='Posterior', marker='o')
 
-    # Plot Aggregated performance, but skip the first two months (since Aggregated is None there)
+    # Plot Aggregated performance
     if any(metric_agg):
-        plt.plot(months[2:], metric_agg[2:], label='Posterior - weighted by UQ', marker='o')
+        plt.plot(months, metric_agg, label='Posterior - weighted by UQ', marker='o')
 
     plt.xlabel("Month")
     plt.ylabel(metric_name)

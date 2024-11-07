@@ -27,8 +27,8 @@ def compute_metrics(P_combined, ground_truths, threshold=0.5):
     predictions = (P_combined >= threshold).astype(int)
 
     # Check if predictions and ground_truths are binary (0 or 1)
-    print(f"Unique values in predictions: {np.unique(predictions)}")
-    print(f"Unique values in ground_truths: {np.unique(ground_truths)}")
+    # print(f"Unique values in predictions: {np.unique(predictions)}")
+    # print(f"Unique values in ground_truths: {np.unique(ground_truths)}")
     
     # Compute accuracy
     accuracy = accuracy_score(ground_truths, predictions)
@@ -126,23 +126,32 @@ def infer_posterior(P_data, P_LLM):
     return P_posterior
 
 
-def uncertainty_based_selection(P_LLM, P_NN, sigma2_LLM, sigma2_NN):
+def uncertainty_based_selection(predictions, uncertainties):
     """
-    Aggregate the predictions by selecting the model with lower epistemic uncertainty.
+    Aggregate predictions by selecting the model with the lowest epistemic uncertainty.
 
     Args:
-    - P_LLM: Probability of engagement predicted by the LLM (array of shape [num_samples]).
-    - P_NN: Probability of engagement predicted by the data-driven model (array of shape [num_samples]).
-    - sigma2_LLM: Epistemic uncertainty of the LLM predictions (array of shape [num_samples]).
-    - sigma2_NN: Epistemic uncertainty of the NN predictions (array of shape [num_samples]).
-    
+    - predictions: List of arrays, where each array is the probability of engagement predicted by a model 
+                   (shape [num_samples] for each array).
+    - uncertainties: List of arrays, where each array is the epistemic uncertainty of the corresponding model's predictions 
+                     (shape [num_samples] for each array).
+
     Returns:
-    - P_combined: Combined posterior probability of engagement (array of shape [num_samples]).
+    - P_combined: Combined posterior probability of engagement, selecting the lowest uncertainty for each sample 
+                  (array of shape [num_samples]).
     """
-    # Select the model with the lower epistemic uncertainty for each test point
-    P_combined = np.where(sigma2_LLM < sigma2_NN, P_LLM, P_NN)
+    # Stack predictions and uncertainties into arrays of shape [num_samples, num_models]
+    predictions = np.stack(predictions, axis=1)
+    uncertainties = np.stack(uncertainties, axis=1)
+
+    # Index of model with lowest uncertainty for each
+    min_uncertainty_indices = np.argmin(uncertainties, axis=1)
+
+    # Select lowest uncertainty predictions
+    P_combined = predictions[np.arange(predictions.shape[0]), min_uncertainty_indices]
     
     return P_combined
+
 
 
 def bayesian_aggregation(P_LLM, P_data, sigma2_LLM, sigma2_data, normalization_method=None):
@@ -184,7 +193,7 @@ def bayesian_aggregation(P_LLM, P_data, sigma2_LLM, sigma2_data, normalization_m
     P_combined = np.clip(P_combined, 0, 1)
     
     ## how many NaN values are in P_combined
-    print(f"Number of NaN values in P_combined: {np.sum(np.isnan(P_combined))}")
+    # print(f"Number of NaN values in P_combined: {np.sum(np.isnan(P_combined))}")
     # Check for NaN values and handle them
     if np.any(np.isnan(P_combined)):
         print("Warning: NaN values detected in P_combined. Replacing with 0.5.")

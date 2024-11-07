@@ -10,17 +10,19 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_arms", type=int, default=100, help="Number of mothers to simulate.")
-    parser.add_argument("--models", nargs='+', default=["openai", "anthropic"], help="List of LLM models used in evals.")
+    parser.add_argument("--models", nargs='+', default=["anthropic", "meta"], help="List of LLM models used in evals.")
 
     args = parser.parse_args()
 
     # OPENAI
     openai_dir = f'./results/{args.models[0]}_{args.num_arms}'
+    print(openai_dir)
     prediction_files_openai = sorted(glob.glob(f"{openai_dir}/all_individual_predictions_t1_*_t2_*.json"))
     ground_truth_files_openai = sorted(glob.glob(f"{openai_dir}/ground_truths_t1_*_t2_*.json"))
 
     # META
     meta_dir = f'./results/{args.models[1]}_{args.num_arms}'
+    print(meta_dir)
     prediction_files_meta = sorted(glob.glob(f"{meta_dir}/all_individual_predictions_t1_*_t2_*.json"))
     ground_truth_files_meta = sorted(glob.glob(f"{meta_dir}/ground_truths_t1_*_t2_*.json"))
 
@@ -151,10 +153,6 @@ if __name__ == "__main__":
 
 
     # Plot performance curves for each metric
-
-    print(accuracies_openai)
-    print(accuracies_meta)
-    
     months = np.arange(0, len(prediction_files_openai))
 
     plot_performance_vs_month(months, accuracies_openai, accuracies_meta, accuracies_agg, accuracies_avg, "Accuracy")
