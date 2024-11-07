@@ -10,7 +10,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_arms", type=int, default=100, help="Number of mothers to simulate.")
-    parser.add_argument("--models", nargs='+', default=["anthropic", "meta"], help="List of LLM models used in evals.")
+    parser.add_argument("--models", nargs='+', default=["openai", "anthropic"], help="List of LLM models used in evals.")
 
     args = parser.parse_args()
 
@@ -29,14 +29,11 @@ if __name__ == "__main__":
     accuracies_openai, accuracies_meta, accuracies_agg, accuracies_avg = [], [], [], []
     f1_scores_openai, f1_scores_meta, f1_scores_agg, f1_scores_avg = [], [], [], []
     log_likelihoods_openai, log_likelihoods_meta, log_likelihoods_agg, log_likelihoods_avg = [], [], [], []
-
     
-    # # store percentage cases when lower uncertainty prediction was actually selected
-    # selected_confidence_llm_over_time = [] 
-    # selected_confidence_mc_over_time = []
-    # # store percentage cases when it would have been better to select other model's prediction in aggregation
-    # improved_selection_llm_over_time = [] 
-    # improved_selection_mc_over_time = []
+    # store percentage cases when lower uncertainty prediction was actually selected
+    selected_confidence_openai_over_time, selected_confidence_meta_over_time = [], []
+    # store percentage cases when it would have been better to select other model's prediction in aggregation
+    improved_selection_openai_over_time, improved_selection_meta_over_time = [], []
 
     # store distributions
     openai_epistemic_uncertainty_over_time, meta_epistemic_uncertainty_over_time = [], []
@@ -57,7 +54,7 @@ if __name__ == "__main__":
         meta_all_ind_preds, meta_ground_truths = load_predictions_and_ground_truths(meta_predictions_path, meta_ground_truths_path)
         meta_ground_truths = np.squeeze(meta_ground_truths)
 
-        # assert np.all(np.array(openai_ground_truths) == meta_ground_truths), "Ground truths are not the same!"
+        assert np.all(np.array(openai_ground_truths) == meta_ground_truths), "Ground truths are not the same!"
 
         # mean predictions
         openai_mean_predictions = np.array([np.mean(predictions) for predictions in openai_all_ind_preds])
@@ -103,58 +100,55 @@ if __name__ == "__main__":
         log_likelihoods_agg.append(log_likelihood_agg)
         log_likelihoods_avg.append(log_likelihood_avg)
 
-        # ## Uncertainty analysis: 
-        # # Find indices where one model is correct and the other is incorrect
-        # correct_llm_incorrect_mc, correct_mc_incorrect_llm = identify_discrepancies(mean_predictions_llm, mean_predictions_nn, ground_truths_nn)
+        ## Uncertainty analysis: 
+        # Find indices where one model is correct and the other is incorrect
+        correct_openai_incorrect_meta, correct_meta_incorrect_openai = identify_discrepancies(openai_mean_predictions, meta_mean_predictions, openai_ground_truths)
 
-        # # Analyse how often the LOWER uncertainty prediction is selected and correct
-        # selected_llm_confidence = compare_confidence(correct_llm_incorrect_mc, mean_predictions_llm, mean_predictions_nn, epistemic_uncertainty_llm, epistemic_uncertainty_nn, ground_truths_nn, eval_by='uncertainty')
-        # selected_mc_confidence = compare_confidence(correct_mc_incorrect_llm, mean_predictions_llm, mean_predictions_nn, epistemic_uncertainty_llm, epistemic_uncertainty_nn, ground_truths_nn, eval_by='uncertainty')
-        # selected_confidence_llm_over_time.append(selected_llm_confidence)
-        # selected_confidence_mc_over_time.append(selected_mc_confidence)
+        # Analyse how often the LOWER uncertainty prediction is selected and correct
+        selected_openai_confidence = compare_confidence(correct_openai_incorrect_meta, openai_mean_predictions, openai_mean_predictions, openai_epistemic_uncertainty, meta_epistemic_uncertainty, openai_ground_truths, eval_by='uncertainty')
+        selected_meta_confidence = compare_confidence(correct_meta_incorrect_openai, meta_mean_predictions, meta_mean_predictions, openai_epistemic_uncertainty, meta_epistemic_uncertainty, openai_ground_truths, eval_by='uncertainty')
+        selected_confidence_openai_over_time.append(selected_openai_confidence)
+        selected_confidence_meta_over_time.append(selected_meta_confidence)
 
-        # # How often the OTHER model's prediction would have been better
-        # improve_with_llm, improve_with_mc = analyze_improvement(correct_llm_incorrect_mc, correct_mc_incorrect_llm, P_combined, ground_truths_nn)
-        # improved_selection_llm_over_time.append(improve_with_llm)
-        # improved_selection_mc_over_time.append(improve_with_mc)
+        # How often the OTHER model's prediction would have been better
+        improve_with_openai, improve_with_meta = analyze_improvement(correct_openai_incorrect_meta, correct_meta_incorrect_openai, P_combined, openai_ground_truths)
+        improved_selection_openai_over_time.append(improve_with_openai)
+        improved_selection_meta_over_time.append(improve_with_meta)
 
-        # # Store ground truths
-        # gcs_over_time.append(ground_truths_nn)
-
-
-    # # Plot population
-    # plot_distribution_over_time(gcs_over_time, months, 
-    #                             "Population Growth over Time", "Month", ylabel='Population', type='hist')
-
-    # # Plot uncertainty distributions over time
-    # plot_distribution_over_time(epistemic_uncertainty_nn_over_time, months, 
-    #                             "2-stage Model Epistemic Uncertainty Development", "Epistemic Uncertainty")
-    # # plot_distribution_over_time(mean_predictions_nn_over_time, months, 
-    # #                             "2-stage Model Average Probability Development", "Avg. Probability")
-    # # convert to confidence
-    # confidence_nn_over_time = [np.where(x > 0.5, x, 1 - x) for x in mean_predictions_nn_over_time]
-    # plot_distribution_over_time(confidence_nn_over_time, months, 
-    #                             "2-stage Model Confidence Development", "Confidence")
-    # plot_distribution_over_time(epistemic_uncertainty_llm_over_time, months, 
-    #                             "LLM Epistemic Uncertainty Development", "Epistemic Uncertainty")
-    # # plot_distribution_over_time(mean_predictions_llm_over_time, months, 
-    # #                             "LLM Average Probability Development", "Avg. Probability")
-    # confidence_llm_over_time = [np.where(x > 0.5, x, 1 - x) for x in mean_predictions_llm_over_time]
-    # plot_distribution_over_time(confidence_llm_over_time, months, 
-    #                             "LLM Confidence Development", "Confidence")
-    
-    # # Plot uncertainty analysis over time 
-    # plot_uncertainties_vs_month(months, selected_confidence_llm_over_time, selected_confidence_mc_over_time, 
-    #                             "Correct Lower Uncertainty Selections",
-    #                             "correct_selections")
-    # plot_uncertainties_vs_month(months, improved_selection_llm_over_time, improved_selection_mc_over_time, 
-    #                             "Potential Aggregation Improvements",
-    #                             "aggregation_improvements")
+        # Store ground truths
+        gcs_over_time.append(openai_ground_truths)
 
 
     # Plot performance curves for each metric
     months = np.arange(0, len(prediction_files_openai))
 
-    plot_performance_vs_month(months, accuracies_openai, accuracies_meta, accuracies_agg, accuracies_avg, "Accuracy")
-    plot_performance_vs_month(months, f1_scores_openai, f1_scores_meta, f1_scores_agg, f1_scores_avg, "F1 Score")
-    plot_performance_vs_month(months, log_likelihoods_openai, log_likelihoods_meta, log_likelihoods_agg, log_likelihoods_avg, "Log Likelihood")
+    # Plot population
+    plot_distribution_over_time(gcs_over_time, months, 
+                                "Population Growth over Time", "Month", ylabel='Population', type='hist')
+
+    # Plot uncertainty distributions over time
+    plot_distribution_over_time(meta_epistemic_uncertainty_over_time, months, 
+                                f"{args.models[1]} Model Epistemic Uncertainty Development", "Epistemic Uncertainty")
+    # convert to confidence
+    confidence_nn_over_time = [np.where(x > 0.5, x, 1 - x) for x in meta_mean_predictions_over_time]
+    plot_distribution_over_time(confidence_nn_over_time, months, 
+                                f"{args.models[1]} Model Confidence Development", "Confidence")
+    
+    plot_distribution_over_time(openai_epistemic_uncertainty_over_time, months, 
+                                f"{args.models[0]} Model Uncertainty Development", "Epistemic Uncertainty")
+    confidence_llm_over_time = [np.where(x > 0.5, x, 1 - x) for x in openai_mean_predictions_over_time]
+    plot_distribution_over_time(confidence_llm_over_time, months, 
+                                "LLM Confidence Development", "Confidence")
+    
+    # Plot uncertainty analysis over time 
+    plot_uncertainties_vs_month(months, selected_confidence_openai_over_time, selected_confidence_meta_over_time, 
+                                "Correct Lower Uncertainty Selections",
+                                "correct_selections")
+    plot_uncertainties_vs_month(months, improved_selection_openai_over_time, improved_selection_meta_over_time, 
+                                "Potential Aggregation Improvements",
+                                "aggregation_improvements")
+    
+
+    plot_performance_vs_month(months, accuracies_openai, openai_epistemic_uncertainty_over_time, accuracies_meta, meta_epistemic_uncertainty_over_time, accuracies_agg, accuracies_avg, "Accuracy")
+    plot_performance_vs_month(months, f1_scores_openai, openai_epistemic_uncertainty_over_time, f1_scores_meta, meta_epistemic_uncertainty_over_time, f1_scores_agg, f1_scores_avg, "F1 Score")
+    plot_performance_vs_month(months, log_likelihoods_openai, openai_epistemic_uncertainty_over_time, log_likelihoods_meta, meta_epistemic_uncertainty_over_time, log_likelihoods_agg, log_likelihoods_avg, "Log Likelihood")

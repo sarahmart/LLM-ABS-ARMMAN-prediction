@@ -11,7 +11,7 @@ def logistic_growth(t, initial_mothers, L, k, t0):
     return initial_mothers + (L - initial_mothers) / (1 + np.exp(-k * (t - t0)))
 
 
-def plot_performance_vs_month(months, metric_llm, metric_nn, metric_agg, metric_avg, metric_name):
+def plot_performance_vs_month(months, metric_llm, uncertainty_llm, metric_nn, uncertainty_nn, metric_agg, metric_avg, metric_name):
     """
     Plot performance metric vs. month and save the figure.
 
@@ -26,19 +26,18 @@ def plot_performance_vs_month(months, metric_llm, metric_nn, metric_agg, metric_
     plt.figure(figsize=(10, 6))
     
     # Plot LLM performance
-    plt.plot(months, metric_llm, label='LLM1', marker='o')
+    plt.plot(months, metric_llm, label='OpenAI Model', marker='o', linestyle='--')
     
     # Plot NN performance
     if any(metric_nn):
-        plt.plot(months, metric_nn, label='LLM2', marker='o')
-
+        plt.plot(months, metric_nn, label='Anthropic Model', marker='o', linestyle='--')
     # Plot Direct Averaging performance
     if any(metric_avg):
         plt.plot(months, metric_avg, label='Posterior', marker='o')
 
     # Plot Aggregated performance
     if any(metric_agg):
-        plt.plot(months, metric_agg, label='Posterior - weighted by UQ', marker='o')
+        plt.plot(months, metric_agg, label='Uncertainty-weighted Posterior', marker='o', linewidth=2.5)
 
     plt.xlabel("Month")
     plt.ylabel(metric_name)
@@ -124,8 +123,8 @@ def plot_uncertainties_vs_month(months, llm_values, mc_values, plot_title, plot_
     """
 
     plt.figure(figsize=(10, 6))
-    plt.plot(months, llm_values, label='LLM correct', marker='o')
-    plt.plot(months, mc_values, label='Two-stage correct', marker='o')
+    plt.plot(months, llm_values, label='OpenAI correct', marker='o')
+    plt.plot(months, mc_values, label='Anthropic correct', marker='o')
     
     plt.xlabel('Months')
     plt.ylabel('Percentage')
