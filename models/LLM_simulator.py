@@ -13,14 +13,10 @@ from preprocess import data_preprocessing, map_features_to_prompt
 from prompt_templates import *
 from metrics import *
 
+
 # TODO:
-## autoregressive predictions
-## binary classification 
 ## onboarding google doc for server access --> faster results
 ## show no difference between 4o-mini and 4o as justification to use mini 
-
-
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 def load_config(config_path):
@@ -28,58 +24,6 @@ def load_config(config_path):
     with open(config_path, 'r') as f:
         config = json.load(f)
     return config
-
-
-# def extract_listening_time(prediction):
-#     match = re.search(r"Predicted Listening Time: (\d+) seconds", prediction)
-#     if match:
-#         return int(match.group(1))
-#     else:
-#         raise ValueError("Prediction does not follow the expected format.")
-
-# def gpt4_eval(config: dict, sys_prompt: str, user_prompt: str, max_retries: int = 10) -> int:
-#     """Evaluate a prompt using the LLM model with retry logic for incorrect format."""
-    
-#     # Set the API key from the config using requests.post
-#     headers = {
-#         "Content-Type": "application/json",
-#         "api-key": config["api_key"]
-#     }
-
-#     data = {
-#         "model": config["model"],
-#         "messages": [
-#             {"role": "system", "content": sys_prompt},
-#             {"role": "user", "content": user_prompt}
-#         ],
-#         "temperature": 0.7,
-#         "max_tokens": 2048
-#     }
-
-#     for attempt in range(max_retries):
-#         try:
-#             # Using OpenAI's Python client, but with flexibility from the config
-#             response = requests.post(config["api_url"], headers=headers, data=json.dumps(data))
-
-#             # Extracting the prediction
-#             if response.status_code == 200:
-#                 response_data = response.json()
-#                 prediction = response_data["choices"][0]["message"]["content"]
-
-#                 listening_time = extract_listening_time(prediction)
-#                 return listening_time, prediction
-            
-#             else:
-#                 print(f"API request failed with status {response.status_code}: {response.text}")
-#                 time.sleep(2)  # Retry delay
-#                 continue
-
-#         except Exception as ex:
-#             print(f"Extraction failed on attempt {attempt + 1}: {ex}")
-#             time.sleep(3)
-#             continue
-
-#     return "error", None  # Return an error message if all attempts fail
 
 
 def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_retries: int = 10) -> int:
@@ -196,7 +140,7 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
 
 def generate_prompt(mapped_features, prompt_template):
     """Generate a prompt using the provided template, mapped features, and current time step t."""
-    # If t is 0, it's the starting week, so adjust the prompt accordingly
+    # If t is 0, it is the starting week, so adjust the prompt accordingly
     return prompt_template.format(**mapped_features)
 
 
@@ -265,7 +209,7 @@ def process_data(args, engine, features, state_trajectories, action_trajectories
             ground_truth = state_trajectories[arm][t + args.t1]  # The ground truth engagement for the next step
             all_ground_truths[t].append(ground_truth)
 
-    with open(f"./results/{args.config_path.split('_')[0]}_{args.num_arms}_{args.t1}_{args.t2}/engagement_structured_prompts_and_responses_{args.prompt_version}_filter_{str(args.filter)}_{timestamp}.json", "w") as json_file:
+    with open(f"./results/{args.config_path.split('_')[0]}_{args.num_arms}_{args.t1}_{args.t2}/engagement_structured_prompts_and_responses_{args.prompt_version}_filter_{str(args.filter)}.json", "w") as json_file:
         json.dump(structured_results, json_file, indent=4)
 
     for t in range(args.t2):
@@ -392,15 +336,15 @@ def process_data_monthly_with_prompt_ensemble(args, config, features, state_traj
     os.makedirs(f"./results/{model}_{args.num_arms}", exist_ok=True)
 
     # Save the individual predictions to JSON
-    with open(f"./results/{model}_{args.num_arms}/all_individual_predictions_t1_{args.t1}_t2_{args.t2}_{timestamp}.json", "w") as json_file:
+    with open(f"./results/{model}_{args.num_arms}/all_individual_predictions_t1_{args.t1}_t2_{args.t2}.json", "w") as json_file:
         json.dump(all_individual_predictions, json_file, indent=4)
     
     ## Save ground truths
-    with open(f"./results/{model}_{args.num_arms}/ground_truths_t1_{args.t1}_t2_{args.t2}_{timestamp}.json", "w") as json_file:
+    with open(f"./results/{model}_{args.num_arms}/ground_truths_t1_{args.t1}_t2_{args.t2}.json", "w") as json_file:
         json.dump(ground_truths, json_file, indent=4)
 
     # Save structured_results as JSON
-    with open(f"./results/{model}_{args.num_arms}/structured_results_t1_{args.t1}_t2_{args.t2}_{timestamp}.json", 'w') as f:
+    with open(f"./results/{model}_{args.num_arms}/structured_results_t1_{args.t1}_t2_{args.t2}.json", 'w') as f:
         json.dump(structured_results, f, indent=4)
 
     # Save results and return
