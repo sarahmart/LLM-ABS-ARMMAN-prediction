@@ -3,6 +3,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
+# from models.LLM_simulator import logistic_growth --> fix import
+
+def logistic_growth(t, initial_mothers, L, k, t0):
+    """Adjusted logistic growth model that starts with the initial number of mothers."""
+    # Logistic growth model adds to the initial number of mothers
+    return initial_mothers + (L - initial_mothers) / (1 + np.exp(-k * (t - t0)))
+
+
 def plot_performance_vs_month(months, metric_llm, metric_nn, metric_agg, metric_avg, metric_name):
     """
     Plot performance metric vs. month and save the figure.
@@ -83,7 +91,7 @@ def plot_distribution_over_time(data, months, title, xlabel, ylabel='Density', t
         ax.bar(months, total_counts, label='Total counts')
         x = np.arange(1, 22)
         xs = np.arange(0, 22)
-        ax.plot(xs, [15] + [adjusted_logistic_growth(t, 15, 3000, 0.4, 10) for t in x], label='Logistic Function', color='orange')
+        ax.plot(xs, [15] + [logistic_growth(t, 15, 3000, 0.4, 10) for t in x], label='Logistic Function', color='orange')
 
         for i in range(len(months)):
             # ax.text(months[i] - bar_width/2, not_engaged[i] + 0.05, 

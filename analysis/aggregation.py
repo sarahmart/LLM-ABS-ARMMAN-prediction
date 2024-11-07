@@ -1,9 +1,7 @@
 import numpy as np
 from scipy.stats import entropy
 import json
-import os
 from sklearn.metrics import accuracy_score, f1_score
-import matplotlib.pyplot as plt
 
 # from aggregation_all import plot_uncertainties_vs_month, plot_distribution_over_time, analyze_improvement, compare_confidence, identify_discrepancies
 # from normalization import *
@@ -54,16 +52,6 @@ def binary_entropy(p):
     return -(p * np.log(p) + (1 - p) * np.log(1 - p))
 
 
-def load_mc_predictions_and_ground_truths(month):
-    """
-    Load the MC-Dropout predictions for a given month.
-    Assumes the predictions are saved as 'mc_predictions_month_{month}.npy'.
-    """
-    mc_predictions = np.load(f"mc_predictions_month_{month}.npy", allow_pickle=True)
-    ground_truths = np.load(f"ground_truths_month_{month}.npy", allow_pickle=True)
-    return mc_predictions, ground_truths
-
-
 def load_predictions_and_ground_truths(predictions_path, ground_truths_path):
     """Load saved individual predictions and ground truths from JSON files."""
     with open(predictions_path, 'r') as f:
@@ -73,35 +61,6 @@ def load_predictions_and_ground_truths(predictions_path, ground_truths_path):
         ground_truths = json.load(f)
     
     return all_individual_predictions, ground_truths
-
-
-def compute_uncertainties(mc_predictions):
-    """
-    Compute epistemic and aleatoric uncertainties from MC-Dropout predictions.
-
-    Args:
-    - mc_predictions: A numpy array of shape (mc_iterations, num_test_points, 1), where 
-      mc_iterations is the number of MC-Dropout iterations and num_test_points is the number of test samples.
-
-    Returns:
-    - epistemic_uncertainty: Epistemic uncertainty (difference between predictive and aleatoric uncertainty).
-    - aleatoric_uncertainty: Average of the predictive entropy (aleatoric uncertainty).
-    - predictive_uncertainty: Entropy of the averaged predictions (predictive uncertainty).
-    """
-    # Mean prediction across all MC-Dropout iterations (shape: num_test_points)
-    mean_predictions = np.mean(mc_predictions, axis=0)
-
-    # Compute predictive uncertainty (entropy of mean prediction)
-    predictive_uncertainty = binary_entropy(mean_predictions)
-
-    # Compute aleatoric uncertainty (mean entropy of individual predictions)
-    individual_entropies = binary_entropy(mc_predictions)
-    aleatoric_uncertainty = np.mean(individual_entropies, axis=0)
-
-    # Compute epistemic uncertainty as the difference
-    epistemic_uncertainty = predictive_uncertainty - aleatoric_uncertainty
-
-    return epistemic_uncertainty, aleatoric_uncertainty, predictive_uncertainty
 
 
 def compute_uncertainties_from_llm_predictions(all_individual_predictions):
