@@ -100,28 +100,34 @@ def compute_uncertainties_from_llm_predictions(all_individual_predictions):
     return epistemic_uncertainty, aleatoric_uncertainty, predictive_uncertainty
 
 
-def infer_posterior(P_data, P_LLM):
+def infer_posterior(*predictions):
     """
-    Infer the posterior probability using LLM as a prior.
+    Infer the posterior probability using multiple models as priors.
 
     Args:
-    - P_data: Probability of engagement predicted by the data-driven model (array of shape [num_samples]).
-    - P_LLM: Probability of engagement predicted by the LLM (array of shape [num_samples]).
+    - *predictions: A variable number of arrays, where each array represents the probability of engagement
+                    predicted by a model (each array should have shape [num_samples]).
 
     Returns:
     - P_posterior: Posterior probability of engagement (array of shape [num_samples]).
     """
-    # Compute probabilities of not engaging for both data and LLM
-    P_data_not_engage = 1 - P_data
-    P_LLM_not_engage = 1 - P_LLM
 
-    # Apply the Bayesian formula
-    numerator = P_data * P_LLM
-    denominator = (P_data * P_LLM) + (P_data_not_engage * P_LLM_not_engage)
+    # Start with first model's predictions as initial prior
+    P_posterior = predictions[0]
     
-    # Avoid division by zero in case of very small values
-    epsilon = 1e-10
-    P_posterior = numerator / (denominator + epsilon)
+    # Update posterior iteratively --> loop through all models' results
+    for P in predictions[1:]:
+        # Calculate probability of not engaging for current posterior and current model
+        P_not_engage_posterior = 1 - P_posterior
+        P_not_engage_current = 1 - P
+
+        # Apply Bayesian update
+        numerator = P_posterior * P
+        denominator = (P_posterior * P) + (P_not_engage_posterior * P_not_engage_current)
+        
+        # Avoid zero division
+        epsilon = 1e-10
+        P_posterior = numerator / (denominator + epsilon)
 
     return P_posterior
 
@@ -153,47 +159,45 @@ def uncertainty_based_selection(predictions, uncertainties):
     return P_combined
 
 
-
-def bayesian_aggregation(P_LLM, P_data, sigma2_LLM, sigma2_data, normalization_method=None):
+def bayesian_aggregation(predictions, uncertainties, normalization_method=None):
     """
-    Aggregate the predictions from LLM and data-driven model using Bayesian weighting with a linear combination.
-    
+    Aggregate predictions from multiple models using Bayesian weighting with a linear combination.
+
     Args:
-    - P_LLM: Probability of engagement predicted by the LLM (array of shape [num_samples]).
-    - P_data: Probability of engagement predicted by the data-driven model (array of shape [num_samples]).
-    - sigma2_LLM: Epistemic uncertainty of the LLM predictions (array of shape [num_samples]).
-    - sigma2_data: Epistemic uncertainty of the data-driven model predictions (array of shape [num_samples]).
+    - predictions: List of arrays, where each array is the probability of engagement predicted by a model 
+                   (each array should have shape [num_samples]).
+    - uncertainties: List of arrays, where each array is the epistemic uncertainty of the corresponding model's predictions 
+                     (each array should have shape [num_samples]).
     - normalization_method: Function to normalize uncertainties from normalization.py.
 
-    
     Returns:
     - P_combined: Combined posterior probability of engagement (array of shape [num_samples]).
     """
 
+    # Apply normalization to each model's uncertainties if specified
     if normalization_method is not None:
-        sigma2_LLM = normalization_method(sigma2_LLM)
-        sigma2_data = normalization_method(sigma2_data)
+        uncertainties = [normalization_method(u) for u in uncertainties]
 
-    # Add a small epsilon to avoid division by zero or near-zero uncertainties
+    # Add small epsilon to avoid zero division or near-zero uncertainties
     epsilon = 1e-10
-    sigma2_LLM = np.array(sigma2_LLM) + epsilon
-    sigma2_data = np.array(sigma2_data) + epsilon
+    uncertainties = [np.array(u) + epsilon for u in uncertainties]
     
-    # Convert epistemic uncertainties to precision (tau)
-    tau_LLM = 1 / sigma2_LLM
-    tau_data = 1 / sigma2_data
+    # Convert epistemic uncertainties to precision (tau) for each model
+    precisions = [1 / u for u in uncertainties]
     
-    # Compute alpha for each test point (the weight for LLM)
-    alpha = tau_LLM / (tau_LLM + tau_data)
+    # Sum up all precisions to compute the denominator for each test point
+    total_precision = np.sum(precisions, axis=0)
+
+    # Calculate weighted predictions :
+    # multiplying each prediction with its model's precision, then sum 
+    weighted_predictions = np.sum([p * tau for p, tau in zip(predictions, precisions)], axis=0)
     
-    # Combine the predictions as a weighted linear combination
-    P_combined = alpha * P_LLM + (1 - alpha) * P_data
-    
-    # Ensure the combined probabilities stay within [0, 1]
+    # Compute final combined prediction
+    P_combined = weighted_predictions / total_precision
+
+    # Ensure combined probabilities stay within [0, 1]
     P_combined = np.clip(P_combined, 0, 1)
-    
-    ## how many NaN values are in P_combined
-    # print(f"Number of NaN values in P_combined: {np.sum(np.isnan(P_combined))}")
+
     # Check for NaN values and handle them
     if np.any(np.isnan(P_combined)):
         print("Warning: NaN values detected in P_combined. Replacing with 0.5.")

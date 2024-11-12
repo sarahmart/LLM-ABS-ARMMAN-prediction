@@ -1,4 +1,5 @@
 # imports 
+import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -48,6 +49,52 @@ def plot_performance_vs_month(months, metric_llm, uncertainty_llm, metric_nn, un
     # Save the figure
     plt.savefig(f"{metric_name.replace(' ', '_').lower()}_vs_month.png")
     
+    plt.show()
+
+
+def plot_performance_vs_month_new(months, *metrics, metric_agg, metric_avg, metric_name, model_labels=None):
+    """
+    Plot performance metric vs. month for multiple models, including aggregated and averaged metrics,
+    using a gradient of blues for each model.
+
+    Args:
+    - months: List of months.
+    - *metrics: Metric values for each model (passed as separate arrays).
+    - metric_agg: Metric values for aggregated predictions.
+    - metric_avg: Metric values for direct averaging predictions.
+    - metric_name: Name of the metric (e.g., 'Accuracy', 'F1 Score', 'Log Likelihood').
+    - model_labels: List of labels for each model (default is 'Model 1', 'Model 2', ...).
+    """
+    plt.figure(figsize=(10, 6))
+
+    # If no custom labels provided, create default labels
+    if model_labels is None:
+        model_labels = [f"Model {i+1}" for i in range(len(metrics))]
+
+    # Set up a colormap for distinguishable shades of blue (skip the lightest shades)
+    cmap = cm.get_cmap('Blues')
+    colors = [cmap(0.5 + 0.3 * i / (len(metrics) - 1)) for i in range(len(metrics))]
+
+    # Plot each model's metric with a different shade of blue
+    for metric, label, color in zip(metrics, model_labels, colors):
+        plt.plot(months, metric, label=label, marker='o', linestyle='--', color=color, alpha=0.7)
+
+    # Plot Direct Averaging performance in orange
+    if any(metric_avg):
+        plt.plot(months, metric_avg, label='Posterior (Avg)', marker='o', color='orchid')
+
+    # Plot Aggregated performance in green
+    if any(metric_agg):
+        plt.plot(months, metric_agg, label='Uncertainty-weighted Posterior', marker='o', linewidth=2.5, color='orange')
+
+    plt.xlabel("Month")
+    plt.ylabel(metric_name)
+    plt.title(f"{metric_name} vs. Month")
+    plt.legend()
+    plt.grid(True)
+    
+    # Save the figure
+    plt.savefig(f"{metric_name.replace(' ', '_').lower()}_vs_month.png")
     plt.show()
 
 
