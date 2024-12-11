@@ -1,3 +1,4 @@
 *_config.json
 data/
 results/
+__pycache__/
