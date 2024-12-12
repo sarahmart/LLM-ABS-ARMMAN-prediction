@@ -18,18 +18,20 @@ if __name__ == "__main__":
 
     features, state_trajectories, action_trajectories = data_preprocessing(args.data_path)
 
+    # print(features, state_trajectories, action_trajectories)
+
     sys_prompt = system_prompt()
 
     # Process the data and compute errors for monthly engagement with new mothers joining each month
-    (all_ground_truths, all_binary_predictions, extraction_failures) = process_data_monthly_with_prompt_ensemble(args, 
-                                                                                                                 engine, 
-                                                                                                                 features, 
-                                                                                                                 state_trajectories, 
-                                                                                                                 action_trajectories, 
-                                                                                                                 sys_prompt,
-                                                                                                                 initial_mothers=args.num_arms,
-                                                                                                                 L=100, k=0.4, t0=10) # CHANGE LATER
-
+    (all_ground_truths, 
+     all_binary_predictions, 
+     extraction_failures) = process_data_weekly_with_prompt_ensemble(args, 
+                                                                      engine, 
+                                                                      features, 
+                                                                      state_trajectories, 
+                                                                      action_trajectories, 
+                                                                      sys_prompt)
+    
     # Compute total accuracy, F1 score, and log likelihood for months t1 to t2
     total_accuracy, total_f1_score, total_log_likelihood = compute_total_metrics(all_binary_predictions, all_ground_truths, args.t1, args.t2)
 
@@ -40,12 +42,12 @@ if __name__ == "__main__":
     # Save to results/model_num_arms_t1_t2
     model = args.config_path.split('_')[0]
     # os.makedirs(f"results/{model}_{args.num_arms}_{args.t1}_{args.t2}", exist_ok=True)
-    np.save(f"./results/{model}_{args.num_arms}/engagement_gpt_ground_truths_t1_{args.t1}_t2_{args.t2}.npy", np.array(flat_ground_truths))
-    np.save(f"./results/{model}_{args.num_arms}/engagement_gpt_binary_predictions_t1_{args.t1}_t2_{args.t2}.npy", np.array(flat_binary_predictions))
+    np.save(f"./results/weekly/{model}_{args.num_arms}/engagement_gpt_ground_truths_t1_{args.t1}_t2_{args.t2}.npy", np.array(flat_ground_truths))
+    np.save(f"./results/weekly/{model}_{args.num_arms}/engagement_gpt_binary_predictions_t1_{args.t1}_t2_{args.t2}.npy", np.array(flat_binary_predictions))
 
 
     # Log final results in a text file, also save the metrics per step
-    with open(f"./results/{model}_{args.num_arms}/engagement_gpt_predictions_summary_t1_{args.t1}_t2_{args.t2}.txt", "w") as summary_file:
+    with open(f"./results/weekly/{model}_{args.num_arms}/engagement_gpt_predictions_summary_t1_{args.t1}_t2_{args.t2}.txt", "w") as summary_file:
         summary_file.write(f"Total Accuracy: {total_accuracy}\n")
         summary_file.write(f"Total F1 Score: {total_f1_score}\n")
         summary_file.write(f"Total Log Likelihood: {total_log_likelihood}\n")
