@@ -1,7 +1,7 @@
 import json
 import numpy as np
 
-def data_preprocessing(data_path, groups=['control']):
+def data_preprocessing(data_path, groups=['random']):
     """Preprocess the data from the input JSON file for the groups specified."""
 
     with open(data_path, 'r') as f:
