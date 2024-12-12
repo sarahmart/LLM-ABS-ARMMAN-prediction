@@ -1,4 +1,5 @@
 *_config.json
 data/
 results/
+plots/
 __pycache__/
