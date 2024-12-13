@@ -38,8 +38,8 @@ def compute_log_likelihood_bin(predicted_binary, ground_truths):
 def compute_total_metrics(all_binary_predictions, all_ground_truths, t1, t2):
     flat_predictions = []
     flat_ground_truths = []
-    
-    for m in range(t1, t2+1):
+
+    for m in range(t1, t2): # t2+1
         flat_predictions.extend(all_binary_predictions[m])
         flat_ground_truths.extend(all_ground_truths[m])
     

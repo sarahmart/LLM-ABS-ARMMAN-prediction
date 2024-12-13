@@ -18,8 +18,6 @@ if __name__ == "__main__":
 
     features, state_trajectories, action_trajectories = data_preprocessing(args.data_path)
 
-    # print(features, state_trajectories, action_trajectories)
-
     sys_prompt = system_prompt()
 
     # Process the data and compute errors for monthly engagement with new mothers joining each month
