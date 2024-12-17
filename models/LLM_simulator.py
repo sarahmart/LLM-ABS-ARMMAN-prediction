@@ -5,7 +5,11 @@ import time
 
 import numpy as np
 
+import vertexai
+from vertexai.generative_models import GenerativeModel
+
 from datetime import datetime
+from requests.exceptions import Timeout
 from sklearn.metrics import f1_score
 from tqdm import tqdm
 
@@ -89,12 +93,20 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
         }
     }
     
+    elif "google" in model:
+        PROJECT_ID = "seas-dev-llmsimulator-4322"
+        vertexai.init(project=PROJECT_ID, location="us-central1")
+        model = GenerativeModel(config["model"])
+    
     else:
         raise ValueError("Specified model not supported.")
 
     for attempt in range(max_retries):
         try:
-            response = requests.post(config["api_url"], headers=headers, data=json.dumps(data))
+            if "google" in model:
+                response = model.generate_content(sys_prompt + user_prompt)
+            else:
+                response = requests.post(config["api_url"], headers=headers, data=json.dumps(data), timeout=120)
 
             # Extract prediction
             if response.status_code == 200:
@@ -106,6 +118,8 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                     prediction = response_data["content"][0]["text"]
                 elif "meta" in model:
                     prediction = response_data["generation"]
+                elif "google" in model:
+                    prediction = response.text
 
                 if "#Yes#" in prediction and "#No#" in prediction:
                     raise ValueError("Prediction not consistent.")
@@ -127,6 +141,12 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                 print("Retrying...")
                 time.sleep(2)
 
+        except Timeout:
+            print(f"Request timed out after 2 mins.")
+            if attempt < max_retries - 1:
+                print("Retrying...")
+                time.sleep(2)
+        
         except Exception as ex:
             print(ex)
             time.sleep(3)
