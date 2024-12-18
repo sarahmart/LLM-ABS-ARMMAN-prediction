@@ -1,6 +1,7 @@
 *_config.json
 data/
 results/
+venv/
 plots/
 __pycache__/
 *.png
