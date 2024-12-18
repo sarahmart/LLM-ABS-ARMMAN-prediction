@@ -1,5 +1,5 @@
 import json
-import os
+import os, sys
 import requests
 import time
 
@@ -357,7 +357,7 @@ def process_data_weekly_with_prompt_ensemble(args, config, features, state_traje
     structured_results = {}
     ground_truths = []
 
-    for w in tqdm(range(args.t2 - args.t1), desc="Processing steps", leave=False):
+    for w in tqdm(range(args.t2 - args.t1), desc="Processing steps", leave=False, file=sys.stdout):
         
         if w < args.t1: # skip LLM predictions
             continue  # Skip LLM predictions for months before t1
@@ -367,7 +367,7 @@ def process_data_weekly_with_prompt_ensemble(args, config, features, state_traje
             
             structured_results[w] = {}
 
-            for arm in tqdm(range(args.num_arms), desc="Processing arms", leave=False):
+            for arm in tqdm(range(args.num_arms), desc="Processing arms", leave=False, file=sys.stdout):
                 structured_results[w][arm] = {"prompt": [], "responses": []}
                 
                 arm_features = features[arm]
