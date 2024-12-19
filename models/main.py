@@ -11,6 +11,7 @@ if __name__ == "__main__":
     parser.add_argument("--config_path", type=str, default="openai_config.json", help="Path to the LLM API configuration file.")
     parser.add_argument("--t1", type=int, default=0, help="Start month for LLM predictions.")
     parser.add_argument("--t2", type=int, default=4, help="End month for LLM predictions.")
+    parser.add_argument("--num_queries", type=int, default=5, help="Number of queries to LLM for each prompt.") 
 
     args = parser.parse_args()
 

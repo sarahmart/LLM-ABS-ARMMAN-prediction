@@ -8,6 +8,7 @@ import numpy as np
 import vertexai
 from vertexai.generative_models import GenerativeModel
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from requests.exceptions import Timeout
 from sklearn.metrics import f1_score
@@ -94,66 +95,70 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
     }
     
     elif "google" in model:
-        PROJECT_ID = "seas-dev-llmsimulator-4322"
+        PROJECT_ID = config["project_id"]
         vertexai.init(project=PROJECT_ID, location="us-central1")
-        model = GenerativeModel(config["model"])
+        google_model = GenerativeModel(config["model"])
     
     else:
         raise ValueError("Specified model not supported.")
 
+    backoff_time = 5
     for attempt in range(max_retries):
         try:
             if "google" in model:
-                response = model.generate_content(sys_prompt + user_prompt)
+                response = google_model.generate_content(sys_prompt + user_prompt)
+                prediction = response.text
             else:
                 response = requests.post(config["api_url"], headers=headers, data=json.dumps(data), timeout=120)
+                
+                if response.status_code == 429:  # Too Many Requests, issue w anthropicsonnet
+                    retry_after = int(response.headers.get("Retry-After", backoff_time))
+                    print(f"Rate limit hit. Retrying after {retry_after} seconds.")
+                    time.sleep(retry_after)
+                    continue
 
-            # Extract prediction
-            if response.status_code == 200:
+                if response.status_code != 200:
+                    print(f"API request failed with status {response.status_code}: {response.text}")
+                    time.sleep(backoff_time) 
+                    continue
+
+                # Extract prediction
                 response_data = response.json()
-
                 if "openai" in model:
                     prediction = response_data["choices"][0]["message"]["content"]
                 elif "anthropic" in model:
                     prediction = response_data["content"][0]["text"]
                 elif "meta" in model:
                     prediction = response_data["generation"]
-                elif "google" in model:
-                    prediction = response.text
 
-                if "#Yes#" in prediction and "#No#" in prediction:
-                    raise ValueError("Prediction not consistent.")
-                elif "#Yes#" in prediction:
-                    return 1, prediction  # Engaged
-                elif "#No#" in prediction:
-                    return 0, prediction   # Not Engaged
-                else:
-                    raise ValueError("Prediction does not follow the expected format.")
-            
+            if "#Yes#" in prediction and "#No#" in prediction:
+                raise ValueError("Prediction not consistent.")
+            elif "#Yes#" in prediction:
+                return 1, prediction  # Engaged
+            elif "#No#" in prediction:
+                return 0, prediction   # Not Engaged
             else:
-                    print(f"API request failed with status {response.status_code}: {response.text}")
-                    time.sleep(2) 
-                    continue
+                raise ValueError("Prediction does not follow the expected format.")
             
         except ValueError as ex:
             print(f"Extraction failed on attempt {attempt + 1}: {ex}")
             if attempt < max_retries - 1:
                 print("Retrying...")
-                time.sleep(2)
+                time.sleep(backoff_time)
 
         except Timeout:
             print(f"Request timed out after 2 mins.")
             if attempt < max_retries - 1:
                 print("Retrying...")
-                time.sleep(2)
+                time.sleep(backoff_time)
         
         except Exception as ex:
             print(ex)
-            time.sleep(3)
+            time.sleep(backoff_time)
             continue  
 
-    # may not need to return None here, check 
-    return "error", None  # Return error if all attempts fail
+    # may not need to return None here, check (could also not return anything...)
+    return "error", None 
 
 
 def generate_prompt(mapped_features, prompt_template):
@@ -342,13 +347,49 @@ def process_data_monthly_with_prompt_ensemble(args, config, features, state_traj
     return (all_ground_truths, all_binary_predictions, extraction_failures)
 
 
+def process_arm(arm, w, args, features, state_trajectories, action_trajectories, sys_prompt, config, prompt_templates, starting_prompt_templates, extraction_failures):
+    """Process a single arm --> for parallelisation."""
+    
+    week_steps = np.arange(40)
+    arm_features = features[arm]
+    individual_predictions = []  # Store individual predictions for this arm and week
+    predictions = []
+
+    if w == 0:
+        mapped_features = map_features_to_prompt(arm_features, [], [], first_week=True)
+        prompt_text = [generate_prompt(mapped_features, prompt_template) for prompt_template in starting_prompt_templates]
+    else:
+        history_end_week = week_steps[w - 1]
+        arm_states = state_trajectories[arm][:history_end_week]
+        arm_actions = action_trajectories[arm][:history_end_week]
+        mapped_features = map_features_to_prompt(arm_features, arm_states, arm_actions)
+        prompt_text = [generate_prompt(mapped_features, prompt_template) for prompt_template in prompt_templates]
+
+    # Compute ground truth for this arm
+    ground_truth = 1 if np.array(state_trajectories[arm][w]) > 30 else 0
+
+    # Collect predictions
+    for prompt in prompt_text:
+        responses = []
+        for _ in range(args.num_queries):
+            engagement_prediction, response = LLM_eval(config, args.config_path.split('_')[0], sys_prompt, prompt)
+            if engagement_prediction == "error":
+                extraction_failures += 1
+                engagement_prediction = 0
+            responses.append(engagement_prediction)
+        predictions.append(np.mean(responses))  # Average responses for this prompt template
+        individual_predictions.append(responses)  # Save individual predictions for each prompt
+
+    final_engagement_prediction = np.mean(predictions)
+
+    return arm, ground_truth, final_engagement_prediction, individual_predictions
+
+
 def process_data_weekly_with_prompt_ensemble(args, config, features, state_trajectories, action_trajectories, 
                                               sys_prompt, num_queries=5):
     # Use all prompt versions in the ensemble
     prompt_templates = [bin_prompt_v1(), bin_prompt_v2(), bin_prompt_v3(), bin_prompt_v4(), bin_prompt_v5()] 
     starting_prompt_templates = [starting_prompt_v2(), starting_prompt_v3(), starting_prompt_v4(), starting_prompt_v5(), starting_prompt_v6()]
-
-    week_steps = np.arange(40)
 
     all_binary_predictions = [[] for _ in range(args.t2)]  # To store binary predictions for t2 steps
     all_ground_truths = [[] for _ in range(args.t2)]
@@ -357,71 +398,64 @@ def process_data_weekly_with_prompt_ensemble(args, config, features, state_traje
     structured_results = {}
     ground_truths = []
 
-    for w in tqdm(range(args.t2 - args.t1), desc="Processing steps", leave=False, file=sys.stdout):
-        
-        if w < args.t1: # skip LLM predictions
-            continue  # Skip LLM predictions for months before t1
+    model = args.config_path.split('_')[0]
+    output_dir = f"./results/weekly/{model}_{args.num_arms}"
+    os.makedirs(output_dir, exist_ok=True)
 
-        # From month t1 to t2, use AR LLM predictions
+    for w in tqdm(range(args.t2 - args.t1), desc="Processing steps", leave=False, file=sys.stdout):
+
+        if w < args.t1:  # Skip LLM predictions for months before t1
+            continue
+
         if args.t1 <= w <= args.t2:
-            
             structured_results[w] = {}
 
-            for arm in tqdm(range(args.num_arms), desc="Processing arms", leave=False, file=sys.stdout):
-                structured_results[w][arm] = {"prompt": [], "responses": []}
-                
-                arm_features = features[arm]
+            # Parallelized loop for arms
+            with ThreadPoolExecutor() as executor:
+                futures = [
+                    executor.submit(
+                        process_arm,
+                        arm,
+                        w,
+                        args,
+                        features,
+                        state_trajectories,
+                        action_trajectories,
+                        sys_prompt,
+                        config,
+                        prompt_templates,
+                        starting_prompt_templates,
+                        extraction_failures
+                    )
+                    for arm in range(args.num_arms)
+                ]
+                for future in futures:
+                    arm, ground_truth, final_engagement_prediction, individual_predictions = future.result()
 
-                if w == 0:
-                    mapped_features = map_features_to_prompt(arm_features, [], [], first_week=True)
-                    prompt_text = [generate_prompt(mapped_features, prompt_template) for prompt_template in starting_prompt_templates]
-                else:
-                    history_end_week = week_steps[w-1]
-                    arm_states = state_trajectories[arm][:history_end_week]
-                    arm_actions = action_trajectories[arm][:history_end_week]
-                    
-                    mapped_features = map_features_to_prompt(arm_features, arm_states, arm_actions)
-                    prompt_text = [generate_prompt(mapped_features, prompt_template) for prompt_template in prompt_templates]
+                    # Store results
+                    structured_results[w][arm] = {"responses": individual_predictions}
+                    all_binary_predictions[w].append(final_engagement_prediction)
+                    all_ground_truths[w].append(ground_truth)
+                    all_individual_predictions.append(individual_predictions)
 
-                ground_truth = 1 if np.array(state_trajectories[arm][w]) > 30 else 0
+            # Save intermediate results after each week
+            with open(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}_week_{w}.json", "w") as f:
+                json.dump(structured_results, f, indent=4)
 
-                ground_truths.append(ground_truth)
-                predictions = []
-                individual_predictions = []  # Store individual predictions for this arm and week
-                
-                for prompt in prompt_text:
-                    responses = []
-                    for _ in range(num_queries):
-                        engagement_prediction, response = LLM_eval(config, args.config_path.split('_')[0], sys_prompt, prompt)
-                        if engagement_prediction == "error":
-                            extraction_failures += 1
-                            engagement_prediction = 0
-                        responses.append(engagement_prediction)
-                    structured_results[w][arm]["responses"].append(response)
-                    predictions.append(np.mean(responses))    # Average responses for this prompt template
-                    individual_predictions.append(responses)  # Save individual predictions for each prompt
+            with open(f"{output_dir}/binary_predictions_t1_{args.t1}_t2_{args.t2}_week_{w}.json", "w") as f:
+                json.dump(all_binary_predictions, f, indent=4)
 
-                # Ensemble: Majority voting or averaging across prompt templates
-                final_engagement_prediction = np.mean(predictions)
-                all_binary_predictions[w].append(final_engagement_prediction)
-                all_ground_truths[w].append(ground_truth)
-                all_individual_predictions.append(individual_predictions)  # Save all individual predictions
+            with open(f"{output_dir}/ground_truths_t1_{args.t1}_t2_{args.t2}_week_{w}.json", "w") as f:
+                json.dump(all_ground_truths, f, indent=4)
 
-
-    model = args.config_path.split('_')[0]
-    os.makedirs(f"./results/weekly/{model}_{args.num_arms}", exist_ok=True)
-
-    # Save the individual predictions to JSON
-    with open(f"./results/weekly/{model}_{args.num_arms}/all_individual_predictions_t1_{args.t1}_t2_{args.t2}.json", "w") as json_file:
+    # Save final results
+    with open(f"{output_dir}/all_individual_predictions_t1_{args.t1}_t2_{args.t2}.json", "w") as json_file:
         json.dump(all_individual_predictions, json_file, indent=4)
-    
-    ## Save ground truths
-    with open(f"./results/weekly/{model}_{args.num_arms}/ground_truths_t1_{args.t1}_t2_{args.t2}.json", "w") as json_file:
+
+    with open(f"{output_dir}/ground_truths_t1_{args.t1}_t2_{args.t2}.json", "w") as json_file:
         json.dump(ground_truths, json_file, indent=4)
 
-    # Save structured_results as JSON
-    with open(f"./results/weekly/{model}_{args.num_arms}/structured_results_t1_{args.t1}_t2_{args.t2}.json", 'w') as f:
+    with open(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}.json", "w") as f:
         json.dump(structured_results, f, indent=4)
 
-    # Save results and return
     return (all_ground_truths, all_binary_predictions, extraction_failures)
