@@ -19,11 +19,6 @@ from prompt_templates import *
 from metrics import *
 
 
-# TODO:
-## onboarding google doc for server access --> faster results
-## show no difference between 4o-mini and 4o as justification to use mini 
-
-
 def load_config(config_path):
     """Load the configuration file for the LLM API."""
     with open(config_path, 'r') as f:
@@ -386,7 +381,7 @@ def process_arm(arm, w, args, features, state_trajectories, action_trajectories,
 
 
 def process_data_weekly_with_prompt_ensemble(args, config, features, state_trajectories, action_trajectories, 
-                                              sys_prompt, num_queries=5):
+                                              sys_prompt):
     # Use all prompt versions in the ensemble
     prompt_templates = [bin_prompt_v1(), bin_prompt_v2(), bin_prompt_v3(), bin_prompt_v4(), bin_prompt_v5()] 
     starting_prompt_templates = [starting_prompt_v2(), starting_prompt_v3(), starting_prompt_v4(), starting_prompt_v5(), starting_prompt_v6()]
@@ -402,7 +397,7 @@ def process_data_weekly_with_prompt_ensemble(args, config, features, state_traje
     output_dir = f"./results/weekly/{model}_{args.num_arms}"
     os.makedirs(output_dir, exist_ok=True)
 
-    for w in tqdm(range(args.t2 - args.t1), desc="Processing steps", leave=False, file=sys.stdout):
+    for w in tqdm(range(args.t2 - args.t1), desc="Processing weeks", leave=False, file=sys.stdout):
 
         if w < args.t1:  # Skip LLM predictions for months before t1
             continue
@@ -410,8 +405,9 @@ def process_data_weekly_with_prompt_ensemble(args, config, features, state_traje
         if args.t1 <= w <= args.t2:
             structured_results[w] = {}
 
-            # Parallelized loop for arms
+            # Parallelised loop for arms
             with ThreadPoolExecutor() as executor:
+                arms_progress = tqdm(total=args.num_arms, desc=f"Week {w} arms", leave=False, file=sys.stdout)
                 futures = [
                     executor.submit(
                         process_arm,
@@ -432,11 +428,16 @@ def process_data_weekly_with_prompt_ensemble(args, config, features, state_traje
                 for future in futures:
                     arm, ground_truth, final_engagement_prediction, individual_predictions = future.result()
 
+                    print(f"Processed arm {arm} for week {w}")
+                    arms_progress.update(1)
+                    
                     # Store results
                     structured_results[w][arm] = {"responses": individual_predictions}
                     all_binary_predictions[w].append(final_engagement_prediction)
                     all_ground_truths[w].append(ground_truth)
                     all_individual_predictions.append(individual_predictions)
+
+                arms_progress.close()
 
             # Save intermediate results after each week
             with open(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}_week_{w}.json", "w") as f:
