@@ -1,10 +1,20 @@
+# imports
 import numpy as np
 from scipy.stats import entropy
 import json
 from sklearn.metrics import accuracy_score, f1_score
 
-# from aggregation_all import plot_uncertainties_vs_month, plot_distribution_over_time, analyze_improvement, compare_confidence, identify_discrepancies
-# from normalization import *
+
+def load_predictions_and_ground_truths(predictions_path, ground_truths_path):
+    """Load saved individual predictions and ground truths from JSON files."""
+    with open(predictions_path, 'r') as f:
+        all_individual_predictions = json.load(f)
+    
+    with open(ground_truths_path, 'r') as f:
+        ground_truths = json.load(f)
+    
+    return all_individual_predictions, ground_truths
+
 
 def compute_metrics(P_combined, ground_truths, threshold=0.5):
     """
@@ -24,6 +34,7 @@ def compute_metrics(P_combined, ground_truths, threshold=0.5):
     ground_truths = np.array(ground_truths).astype(int)
     
     # Binarize the predictions based on the threshold and ensure they are integers
+    P_combined = np.array(P_combined)
     predictions = (P_combined >= threshold).astype(int)
 
     # Check if predictions and ground_truths are binary (0 or 1)
@@ -50,17 +61,6 @@ def binary_entropy(p):
     """Compute binary entropy for Bernoulli distribution."""
     p = np.clip(p, 1e-10, 1 - 1e-10)  # Avoid log(0) errors
     return -(p * np.log(p) + (1 - p) * np.log(1 - p))
-
-
-def load_predictions_and_ground_truths(predictions_path, ground_truths_path):
-    """Load saved individual predictions and ground truths from JSON files."""
-    with open(predictions_path, 'r') as f:
-        all_individual_predictions = json.load(f)
-    
-    with open(ground_truths_path, 'r') as f:
-        ground_truths = json.load(f)
-    
-    return all_individual_predictions, ground_truths
 
 
 def compute_uncertainties_from_llm_predictions(all_individual_predictions):
