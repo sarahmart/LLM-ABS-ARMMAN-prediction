@@ -87,14 +87,14 @@ def plot_performance_vs_month_new(months, *metrics, metric_agg, metric_avg, metr
     if any(metric_agg):
         plt.plot(months, metric_agg, label='Uncertainty-weighted Posterior', marker='o', linewidth=2.5, color='orange')
 
-    plt.xlabel("Month")
+    plt.xlabel("Week Since Program Start")
     plt.ylabel(metric_name)
-    plt.title(f"{metric_name} vs. Month")
+    plt.title(f"{metric_name} vs. Week")
     plt.legend()
     plt.grid(True)
     
     # Save the figure
-    plt.savefig(f"{metric_name.replace(' ', '_').lower()}_vs_month.png")
+    plt.savefig(f"{metric_name.replace(' ', '_').lower()}_vs_week.png")
     plt.show()
 
 
@@ -181,4 +181,58 @@ def plot_uncertainties_vs_month(months, llm_values, mc_values, plot_title, plot_
 
     plt.savefig(plot_name + ".png")
 
+    plt.show()
+
+
+def plot_k_corresponding(models, ground_truth, k, metric_name="Correctly Predicted Lowest-k Engagement"):
+    """
+    Generate a bar chart showing the percentage of correctly predicted lowest-k engagement beneficiaries 
+    for each model overall.
+
+    Args:
+    - models: Dictionary with model names as keys and their binary engagement data as values.
+    - ground_truth: List of binary ground truth arrays for engagement (0s and 1s).
+    - k: Number of lowest engagement beneficiaries to consider.
+    - metric_name: Name of the metric to display in the chart title.
+    """
+    # Combine all ground truth arrays into a single array
+    combined_ground_truth = np.concatenate(ground_truth)
+
+    # Identify indices of the ground truth's lowest-k engagement beneficiaries
+    true_lowest_k_indices = set(np.argsort(combined_ground_truth)[:k])
+
+    # Calculate accuracy for each model
+    model_accuracies = {}
+    for model_name, predictions_list in models.items():
+        # Combine all prediction arrays for the current model
+        combined_predictions = np.concatenate(predictions_list)
+
+        # Identify the predicted lowest-k engagement beneficiaries
+        predicted_lowest_k_indices = set(np.argsort(combined_predictions)[:k])
+        
+        # Compute accuracy
+        correct_count = len(predicted_lowest_k_indices & true_lowest_k_indices)
+        accuracy = (correct_count / k) * 100  # Percentage of correct predictions
+        model_accuracies[model_name] = accuracy
+
+    # Plot the bar chart
+    plt.figure(figsize=(10, 6))
+    model_names = list(model_accuracies.keys())
+    accuracies = list(model_accuracies.values())
+    bar_positions = np.arange(len(model_names))
+
+    plt.bar(bar_positions, accuracies, color='skyblue', edgecolor='black')
+    plt.xticks(bar_positions, model_names, rotation=45, ha='right')
+    plt.xlabel("Models")
+    plt.ylabel("Accuracy (%)")
+    plt.title(f"{metric_name} (k={k})")
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+    # Annotate bar values
+    for i, accuracy in enumerate(accuracies):
+        plt.text(i, accuracy + 1, f"{accuracy:.1f}%", ha='center', va='bottom', fontsize=10)
+
+    # Save and show plot
+    plt.tight_layout()
+    plt.savefig(f"overall_lowest_k_engagement_accuracy_k_{k}.png")
     plt.show()
