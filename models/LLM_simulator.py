@@ -1,5 +1,6 @@
 import json
 import os, sys
+import random
 import requests
 import time
 
@@ -26,23 +27,24 @@ def load_config(config_path):
     return config
 
 
-def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_retries: int = 10) -> int:
-    """Evaluate a prompt using the LLM model with retry logic for incorrect format."""
+def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_retries: int=10):
+    """Evaluate a prompt using the LLM model with retry logic and exponential backoff (needed for Anthropic models)."""
     
     # Model-dependent headers for the API request
+
     if "openai" in model:
         headers = {
             "Content-Type": "application/json",
             "api-key": config["api_key"]
         }
         data = {
-        "model": config["model"], 
-        "messages": [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 2048
+            "model": config["model"], 
+            "messages": [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 2048
         }
 
     elif "anthropic" in model:
@@ -73,21 +75,20 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
 
     elif "meta" in model:
         headers = {
-        "x-api-key": config["api_key"],
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+            "x-api-key": config["api_key"],
+            "Content-Type": "application/json",
+            "Accept": "application/json"
         }
         data = {
-        "modelId": "meta.llama3-70b-instruct-v1:0",
-        "body": {
-            "prompt": f"""
-                Answer the following question concisely in English (no code) with either '##Yes##' OR '##No##' and avoid extra details.
-                {sys_prompt + user_prompt}
-            """,
-            "temperature": 0.7, 
-            # "top_p": 0.5            
+            "modelId": "meta.llama3-70b-instruct-v1:0",
+            "body": {
+                "prompt": f"""
+                    Answer the following question concisely in English (no code) with either '##Yes##' OR '##No##' and avoid extra details.
+                    {sys_prompt + user_prompt}
+                """,
+                "temperature": 0.7,
+            }
         }
-    }
     
     elif "google" in model:
         PROJECT_ID = config["project_id"]
@@ -95,9 +96,13 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
         google_model = GenerativeModel(config["model"])
     
     else:
-        raise ValueError("Specified model not supported.")
+        raise ValueError("Specified model not yet supported.")
 
-    backoff_time = 5
+    # Exponential backoff --> needed for Anthropic models
+    initial_backoff = 2  # Start with 2 seconds
+    max_backoff = 120    # Cap backoff time at 2 mins (??)
+    backoff_time = initial_backoff
+
     for attempt in range(max_retries):
         try:
             if "google" in model:
@@ -106,7 +111,8 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
             else:
                 response = requests.post(config["api_url"], headers=headers, data=json.dumps(data), timeout=120)
                 
-                if response.status_code == 429:  # Too Many Requests, issue w anthropicsonnet
+                # Handle rate-limiting for Anthropic
+                if response.status_code == 429:  # Too Many Requests
                     retry_after = int(response.headers.get("Retry-After", backoff_time))
                     print(f"Rate limit hit. Retrying after {retry_after} seconds.")
                     time.sleep(retry_after)
@@ -115,6 +121,8 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                 if response.status_code != 200:
                     print(f"API request failed with status {response.status_code}: {response.text}")
                     time.sleep(backoff_time) 
+                    random_millisecs = random.randint(0, 1000) / 1000  # Random milisecs to avoid clients synchronising
+                    backoff_time = min((2 ** attempt) + random_millisecs, max_backoff) # Double backoff time, cap at max_backoff
                     continue
 
                 # Extract prediction
@@ -129,7 +137,7 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
             if "#Yes#" in prediction and "#No#" in prediction:
                 raise ValueError("Prediction not consistent.")
             elif "#Yes#" in prediction:
-                return 1, prediction  # Engaged
+                return 1, prediction   # Engaged
             elif "#No#" in prediction:
                 return 0, prediction   # Not Engaged
             else:
@@ -138,22 +146,28 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
         except ValueError as ex:
             print(f"Extraction failed on attempt {attempt + 1}: {ex}")
             if attempt < max_retries - 1:
-                print("Retrying...")
+                print(f"Retrying after {backoff_time} seconds...")
                 time.sleep(backoff_time)
+                random_millisecs = random.randint(0, 1000) / 1000 
+                backoff_time = min((2 ** attempt) + random_millisecs, max_backoff) 
 
         except Timeout:
             print(f"Request timed out after 2 mins.")
             if attempt < max_retries - 1:
-                print("Retrying...")
+                print(f"Retrying after {backoff_time} seconds...")
                 time.sleep(backoff_time)
+                random_millisecs = random.randint(0, 1000) / 1000  
+                backoff_time = min((2 ** attempt) + random_millisecs, max_backoff) 
+                
         
         except Exception as ex:
-            print(ex)
+            print(f"Unexpected error: {ex}")
             time.sleep(backoff_time)
+            random_millisecs = random.randint(0, 1000) / 1000  
+            backoff_time = min((2 ** attempt) + random_millisecs, max_backoff) 
             continue  
 
-    # may not need to return None here, check (could also not return anything...)
-    return "error", None 
+    return "error", None  
 
 
 def generate_prompt(mapped_features, prompt_template):
