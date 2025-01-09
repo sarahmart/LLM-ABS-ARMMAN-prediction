@@ -51,7 +51,7 @@ def compute_metrics(P_combined, ground_truths, threshold=0.5):
     P_combined_clipped = np.clip(P_combined, epsilon, 1 - epsilon)
     log_likelihood = np.sum(
         ground_truths * np.log(P_combined_clipped) + (1 - ground_truths) * np.log(1 - P_combined_clipped)
-    )
+    ) / len(ground_truths) # normalise by pop size
     
     return accuracy, f1, log_likelihood
 

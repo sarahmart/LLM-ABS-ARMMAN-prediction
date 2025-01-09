@@ -9,7 +9,7 @@ from normalization import rank_normalization
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_arms", type=int, default=100, help="Number of mothers to simulate.")
+    parser.add_argument("--num_arms", type=int, default=500, help="Number of mothers to simulate.")
     parser.add_argument("--models", nargs='+', default=["anthropic", "google", "openai", "openaiheavy"], help="List of LLM models used in evals.")
     parser.add_argument("--t1", type=int, default=0, help="Start month for LLM predictions.")
     parser.add_argument("--t2", type=int, default=40, help="End month for LLM predictions.")
@@ -156,7 +156,8 @@ if __name__ == "__main__":
             metric_agg=[np.mean(agg_metric) for agg_metric in aggregated_metrics[metric_name]],
             metric_avg=[np.mean(avg_metric) for avg_metric in averaged_metrics[metric_name]],
             metric_name=metric_name,
-            model_labels=args.models
+            model_labels=args.models,
+            separate_axes=True
         )
 
 
