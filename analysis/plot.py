@@ -1,16 +1,9 @@
 # imports 
 import math
-import matplotlib.cm as cm
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-
-# from models.LLM_simulator import logistic_growth --> fix import
-
-def logistic_growth(t, initial_mothers, L, k, t0):
-    """Adjusted logistic growth model that starts with the initial number of mothers."""
-    # Logistic growth model adds to the initial number of mothers
-    return initial_mothers + (L - initial_mothers) / (1 + np.exp(-k * (t - t0)))
 
 
 def plot_performance_vs_month(months, metric_llm, uncertainty_llm, metric_nn, uncertainty_nn, metric_agg, metric_avg, metric_name):
@@ -33,6 +26,7 @@ def plot_performance_vs_month(months, metric_llm, uncertainty_llm, metric_nn, un
     # Plot NN performance
     if any(metric_nn):
         plt.plot(months, metric_nn, label='Anthropic Model', marker='o', linestyle='--')
+    
     # Plot Direct Averaging performance
     if any(metric_avg):
         plt.plot(months, metric_avg, label='Posterior', marker='o')
@@ -74,7 +68,7 @@ def plot_performance_vs_month_new(months, *metrics, metric_agg, metric_avg, metr
         # Plot all models on the same axes
 
         plt.figure(figsize=(10, 6))
-        cmap = cm.get_cmap('Blues')
+        cmap = matplotlib.colormaps['Blues']
         colors = [cmap(0.5 + 0.3 * i / (len(metrics) - 1)) for i in range(len(metrics))]
 
         # Plot metrics for each model
@@ -98,13 +92,12 @@ def plot_performance_vs_month_new(months, *metrics, metric_agg, metric_avg, metr
         plt.show()
 
     else:
-        # Create subplots for each model
-        
+        # subplots for each model
         fig, axes = plt.subplots(math.ceil(len(metrics)/2), 2, 
                                  figsize=(13, 4*math.ceil(len(metrics)/2)), 
                                  sharex=True, sharey=True)
         axes = axes.flatten()
-        cmap = cm.get_cmap('Blues')
+        cmap = matplotlib.colormaps['Blues']
 
         for i, (metric, label, ax) in enumerate(zip(metrics, model_labels, axes)):
             color = cmap(0.5 + 0.3 * i / (len(metrics) - 1))
@@ -129,6 +122,44 @@ def plot_performance_vs_month_new(months, *metrics, metric_agg, metric_avg, metr
         plt.tight_layout()
         plt.savefig(f"{metric_name.replace(' ', '_').lower()}_vs_week_subplots.png")
         plt.show()
+
+
+def plot_uncertainty_over_time(timesteps, model_results, combined_uncertainty, direct_avg_uncertainty, models):
+    """
+    Plot epistemic uncertainty over time for each model, the aggregated model, and the direct average model.
+
+    Args:
+    - timesteps: List of timesteps (e.g., weeks or months).
+    - model_results: Dictionary containing epistemic uncertainty for each model.
+    - P_combined_uncertainty: Epistemic uncertainty for the aggregated model.
+    - P_direct_avg_uncertainty: Epistemic uncertainty for the direct average model.
+    - models: List of model names to include in the plot.
+    """
+    plt.figure(figsize=(12, 8))
+    cmap = matplotlib.colormaps['Blues']
+    colors = [cmap(0.5 + 0.3 * i / (len(models) - 1)) for i in range(len(models))]
+
+    # model uncertainties
+    for model, color in zip(models, colors):
+        model_uncertainty = [np.mean(unc) for unc in model_results[model]["epistemic_uncertainty"]]
+        plt.plot(timesteps, model_uncertainty, label=f"{model} Uncertainty", marker='o', linestyle='--', color=color)
+
+    # direct average model uncertainty 
+    direct_avg_uncertainty = [np.mean(unc) for unc in direct_avg_uncertainty]
+    plt.plot(timesteps, direct_avg_uncertainty, label="Direct Average Uncertainty", marker='o', linestyle='-', color='orchid')
+
+    # aggregated model uncertainty
+    combined_uncertainty = [np.mean(unc) for unc in combined_uncertainty]
+    plt.plot(timesteps, combined_uncertainty, label="Aggregated Model Uncertainty", marker='o', linestyle='-', linewidth=2.5, color='orange')
+
+    plt.xlabel("Weeks Since Program Start", fontsize=12)
+    plt.ylabel("Epistemic Uncertainty", fontsize=12)
+    plt.title("Epistemic Uncertainty Over Time", fontsize=14)
+    plt.legend(fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    # plt.savefig('epistemic_uncertainty_over_time.png')
+    plt.show()
 
 
 def plot_distribution_over_time(data, months, title, xlabel, ylabel='Density', type='kde'):

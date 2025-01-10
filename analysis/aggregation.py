@@ -32,11 +32,11 @@ def compute_metrics(P_combined, ground_truths, threshold=0.5):
     # Ensure ground truths are binary integers
     ground_truths = np.array(ground_truths).astype(int)
     
-    # Binarize the predictions based on the threshold and ensure they are integers
+    # Binarize the predictions based on threshold and ensure they are integers
     P_combined = np.array(P_combined)
     predictions = (P_combined >= threshold).astype(int)
 
-    # Check if predictions and ground_truths are binary (0 or 1)
+    # Check if predictions and ground_truths are actually binary (0 or 1)
     # print(f"Unique values in predictions: {np.unique(predictions)}")
     # print(f"Unique values in ground_truths: {np.unique(ground_truths)}")
     
@@ -117,16 +117,18 @@ def compute_uncertainties_from_llm_predictions(all_individual_predictions):
     return epistemic_uncertainty, aleatoric_uncertainty, predictive_uncertainty
 
 
-def infer_posterior(*predictions):
+def infer_posterior(*predictions, uncertainties=None):
     """
-    Infer the posterior probability using multiple models as priors.
+    Infer the posterior probability using multiple models as priors (direct Bayesian averaging of results).
 
     Args:
     - *predictions: A variable number of arrays, where each array represents the probability of engagement
                     predicted by a model (each array should have shape [num_samples]).
+    - uncertainties: Array for each model representing epistemic uncertainties (shape: [num_samples])
 
     Returns:
     - P_posterior: Posterior probability of engagement (array of shape [num_samples]).
+    - avg_uncertainty: Average uncertainty across models w.out weighting (array of shape [num_samples]).
     """
 
     # Start with first model's predictions as initial prior
@@ -146,12 +148,19 @@ def infer_posterior(*predictions):
         epsilon = 1e-10
         P_posterior = numerator / (denominator + epsilon)
 
-    return P_posterior
+    # Calculate average uncertainty across models (new lines added)
+    if uncertainties is not None:
+        avg_uncertainty = np.mean(uncertainties, axis=0)
+    else:
+        avg_uncertainty = None
+
+    return P_posterior, avg_uncertainty
 
 
 def uncertainty_based_selection(predictions, uncertainties):
     """
     Aggregate predictions by selecting the model with the lowest epistemic uncertainty.
+    That lowest uncertainty value is the corresponding uncertainty for the now-aggregated prediction.
 
     Args:
     - predictions: List of arrays, where each array is the probability of engagement predicted by a model 
@@ -162,6 +171,8 @@ def uncertainty_based_selection(predictions, uncertainties):
     Returns:
     - P_combined: Combined posterior probability of engagement, selecting the lowest uncertainty for each sample 
                   (array of shape [num_samples]).
+    # - P_combined_uncertainty: Lowest uncertainty value corresponding to the selected model prediction for each sample
+    #                           (array of shape [num_samples]).
     """
     # Stack predictions and uncertainties into arrays of shape [num_samples, num_models]
     predictions = np.stack(predictions, axis=1)
@@ -191,36 +202,38 @@ def bayesian_aggregation(predictions, uncertainties, normalization_method=None):
     - P_combined: Combined posterior probability of engagement (array of shape [num_samples]).
     """
 
-    # Apply normalization to each model's uncertainties if specified
+    # Normalization uncertainties (if specified)
     if normalization_method is not None:
         uncertainties = [normalization_method(u) for u in uncertainties]
 
-    # Add small epsilon to avoid zero division or near-zero uncertainties
+    # Add small epsilon to avoid zero division w near-zero uncertainties
     epsilon = 1e-10
     uncertainties = [np.array(u) + epsilon for u in uncertainties]
     
-    # Convert epistemic uncertainties to precision (tau) for each model
+    # Convert epistemic uncertainties to precision (tau)
     precisions = [1 / u for u in uncertainties]
     
-    # Sum up all precisions to compute the denominator for each test point
+    # Sum precisions to compute denominator for each point
     total_precision = np.sum(precisions, axis=0)
 
     # Calculate weighted predictions :
-    # multiplying each prediction with its model's precision, then sum 
+    # multiply each prediction with its model's precision, then sum 
     weighted_predictions = np.sum([p * tau for p, tau in zip(predictions, precisions)], axis=0)
     
     # Compute final combined prediction
     P_combined = weighted_predictions / total_precision
-
-    # Ensure combined probabilities stay within [0, 1]
     P_combined = np.clip(P_combined, 0, 1)
 
-    # Check for NaN values and handle them
+    # Handle NaNs by replaceing w 0.5 prob
     if np.any(np.isnan(P_combined)):
         print("Warning: NaN values detected in P_combined. Replacing with 0.5.")
-        P_combined = np.nan_to_num(P_combined, nan=0.5)  # Replace NaN with neutral probability (0.5)
+        P_combined = np.nan_to_num(P_combined, nan=0.5)  
+
+    # Compute aggregated uncertainty (new lines added)
+    weighted_uncertainties = np.sum([u * tau for u, tau in zip(uncertainties, precisions)], axis=0)
+    unc_combined = weighted_uncertainties / total_precision
     
-    return P_combined
+    return P_combined, unc_combined
 
 
 def identify_discrepancies(P_LLM, P_MC, ground_truths, threshold=0.5):
