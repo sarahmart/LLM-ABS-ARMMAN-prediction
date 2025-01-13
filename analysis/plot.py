@@ -158,8 +158,12 @@ def plot_uncertainty_over_time(timesteps, model_results, combined_uncertainty, d
     plt.legend(fontsize=12)
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.tight_layout()
-    # plt.savefig('epistemic_uncertainty_over_time.png')
+    plt.savefig('epistemic_uncertainty_over_time.png')
     plt.show()
+
+
+def logistic_growth(t, a, b, k, m):
+    return a + (b - a) / (1 + k * np.exp(-m * t))
 
 
 def plot_distribution_over_time(data, months, title, xlabel, ylabel='Density', type='kde'):
