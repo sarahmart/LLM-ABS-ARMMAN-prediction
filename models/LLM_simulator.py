@@ -30,7 +30,7 @@ def load_config(config_path):
 def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_retries: int=10):
     """Evaluate a prompt using the LLM model with retry logic and exponential backoff (needed for Anthropic models)."""
     
-    # Model-dependent headers for the API request
+    # Model-dependent headers for API requests
 
     if "openai" in model:
         headers = {
@@ -99,15 +99,18 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
         raise ValueError("Specified model not yet supported.")
 
     # Exponential backoff --> needed for Anthropic models
-    initial_backoff = 2  # Start with 2 seconds
+    initial_backoff = 2  # Start with 2 seconds 
     max_backoff = 120    # Cap backoff time at 2 mins (??)
     backoff_time = initial_backoff
+    backoff_failures = 0  
+    max_backoff_failures = 10 # Terminate if too many successive failures
 
     for attempt in range(max_retries):
         try:
             if "google" in model:
                 response = google_model.generate_content(sys_prompt + user_prompt)
                 prediction = response.text
+                backoff_failures = 0
             else:
                 response = requests.post(config["api_url"], headers=headers, data=json.dumps(data), timeout=120)
                 
@@ -116,6 +119,10 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                     retry_after = int(response.headers.get("Retry-After", backoff_time))
                     print(f"Rate limit hit. Retrying after {retry_after} seconds.")
                     time.sleep(retry_after)
+                    backoff_failures += 1 if retry_after >= max_backoff else 0
+                    if backoff_failures >= max_backoff_failures:
+                        print(f"Auto-terminating: Exceeded {max_backoff_failures} successive max backoff events (too many API failures).")
+                        return "error", None
                     continue
 
                 if response.status_code != 200:
@@ -123,6 +130,16 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                     time.sleep(backoff_time) 
                     random_millisecs = random.randint(0, 1000) / 1000  # Random milisecs to avoid clients synchronising
                     backoff_time = min((2 ** attempt) + random_millisecs, max_backoff) # Double backoff time, cap at max_backoff
+                    
+                    # Increment / reset successive backoff failures
+                    if backoff_time == max_backoff:
+                        backoff_failures += 1
+                        if backoff_failures >= max_backoff_failures:
+                            print(f"Auto-terminating: Exceeded {max_backoff_failures} successive max backoff events (too many API failures).")
+                            return "error", None
+                    else:
+                        backoff_failures = 0
+
                     continue
 
                 # Extract prediction
@@ -133,6 +150,9 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                     prediction = response_data["content"][0]["text"]
                 elif "meta" in model:
                     prediction = response_data["generation"]
+
+                # Reset backoff_failures on success
+                backoff_failures = 0
 
             if "#Yes#" in prediction and "#No#" in prediction:
                 raise ValueError("Prediction not consistent.")
@@ -151,6 +171,15 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                 random_millisecs = random.randint(0, 1000) / 1000 
                 backoff_time = min((2 ** attempt) + random_millisecs, max_backoff) 
 
+                # Increment or reset successive backoff failures
+                if backoff_time == max_backoff:
+                    backoff_failures += 1
+                    if backoff_failures >= max_backoff_failures:
+                        print(f"Auto-terminating: Exceeded {max_backoff_failures} successive max backoff events (too many API failures).")
+                        return "error", None
+                else:
+                    backoff_failures = 0
+
         except Timeout:
             print(f"Request timed out after 2 mins.")
             if attempt < max_retries - 1:
@@ -158,14 +187,33 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                 time.sleep(backoff_time)
                 random_millisecs = random.randint(0, 1000) / 1000  
                 backoff_time = min((2 ** attempt) + random_millisecs, max_backoff) 
+
+                # Increment or reset successive backoff failures
+                if backoff_time == max_backoff:
+                    backoff_failures += 1
+                    if backoff_failures >= max_backoff_failures:
+                        print(f"Auto-terminating: Exceeded {max_backoff_failures} successive max backoff  (too many API failures).")
+                        return "error", None
+                else:
+                    backoff_failures = 0
                 
         
         except Exception as ex:
             print(f"Unexpected error: {ex}")
             time.sleep(backoff_time)
             random_millisecs = random.randint(0, 1000) / 1000  
-            backoff_time = min((2 ** attempt) + random_millisecs, max_backoff) 
-            continue  
+            backoff_time = min((2 ** attempt) + random_millisecs, max_backoff)
+
+            # Increment or reset successive backoff failures
+            if backoff_time == max_backoff:
+                backoff_failures += 1
+                if backoff_failures >= max_backoff_failures:
+                    print(f"Auto-terminating: Exceeded {max_backoff_failures} successive max backoff events (too many API failures).")
+                    return "error", None
+            else:
+                backoff_failures = 0
+
+            continue 
 
     return "error", None  
 
