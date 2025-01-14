@@ -117,7 +117,7 @@ def compute_uncertainties_from_llm_predictions(all_individual_predictions):
     return epistemic_uncertainty, aleatoric_uncertainty, predictive_uncertainty
 
 
-def infer_posterior(*predictions, uncertainties=None):
+def infer_posterior(*predictions, uncertainties=None, normalization_method=None):
     """
     Infer the posterior probability using multiple models as priors (direct Bayesian averaging of results).
 
@@ -130,6 +130,10 @@ def infer_posterior(*predictions, uncertainties=None):
     - P_posterior: Posterior probability of engagement (array of shape [num_samples]).
     - avg_uncertainty: Average uncertainty across models w.out weighting (array of shape [num_samples]).
     """
+
+    # Normalize uncertainties (if specified)
+    if normalization_method is not None:
+        uncertainties = [normalization_method(u) for u in uncertainties]
 
     # Start with first model's predictions as initial prior
     P_posterior = predictions[0]
@@ -202,7 +206,7 @@ def bayesian_aggregation(predictions, uncertainties, normalization_method=None):
     - P_combined: Combined posterior probability of engagement (array of shape [num_samples]).
     """
 
-    # Normalization uncertainties (if specified)
+    # Normalize uncertainties (if specified)
     if normalization_method is not None:
         uncertainties = [normalization_method(u) for u in uncertainties]
 
