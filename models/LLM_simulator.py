@@ -1,3 +1,4 @@
+import glob
 import json
 import os, sys
 import random
@@ -459,7 +460,29 @@ def process_data_weekly_with_prompt_ensemble(args, config, features, state_traje
     output_dir = f"./results/weekly/{model}_{args.num_arms}"
     os.makedirs(output_dir, exist_ok=True)
 
-    for w in tqdm(range(args.t2 - args.t1), desc="Processing weeks", leave=False, file=sys.stdout):
+
+    # Check if already run --> resume from last completed week
+    saved_weeks = glob.glob(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}_week_*.json")
+    if saved_weeks:
+        # Get week numbers from saved file names
+        completed_weeks = sorted([int(f.split("_week_")[1].split(".")[0]) for f in saved_weeks])
+        last_completed_week = completed_weeks[-1]
+        print(f"Resuming from week {last_completed_week + 1}")
+    else: # no saved data
+        last_completed_week = -1
+
+    if last_completed_week != -1:
+        # Load previously saved results
+        with open(f"{output_dir}/binary_predictions_t1_{args.t1}_t2_{args.t2}_week_{last_completed_week}.json", "r") as f:
+            all_binary_predictions = json.load(f)
+
+        with open(f"{output_dir}/ground_truths_t1_{args.t1}_t2_{args.t2}_week_{last_completed_week}.json", "r") as f:
+            all_ground_truths = json.load(f)
+
+        with open(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}_week_{last_completed_week}.json", "r") as f:
+            structured_results = json.load(f)
+
+    for w in tqdm(range(last_completed_week + 1, args.t2), desc="Processing weeks", leave=False, file=sys.stdout):
 
         if w < args.t1:  # Skip LLM predictions for months before t1
             continue
