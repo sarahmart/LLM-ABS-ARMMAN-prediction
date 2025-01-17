@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 
 from aggregation import *
-from plot import plot_uncertainty_over_time, plot_performance_vs_month_new, plot_distribution_over_time, plot_uncertainties_vs_month, plot_k_corresponding
+from plot import plot_uncertainty_over_time, plot_performance_vs_month_new
 from normalization import rank_normalization
 
 if __name__ == "__main__":
@@ -45,6 +45,7 @@ if __name__ == "__main__":
         )
 
         # print("RESHAPED ------------")
+        print(f"predictions: {len(all_individual_preds)}, {len(all_individual_preds[0])}, {len(all_individual_preds[0][0])}")
         all_individual_preds = np.reshape(all_individual_preds, (args.t2-args.t1, args.num_arms, 5, 5))
         ground_truths = np.squeeze(ground_truths)
         # ground_truths = np.reshape(ground_truths, (args.num_arms, args.t2-args.t1))
@@ -106,6 +107,7 @@ if __name__ == "__main__":
     
     P_combined, unc_combined = [], []
     P_direct_avg, unc_direct_avg = [], []
+    P_lowest_unc, unc_lowest_unc = [], []
     for t in range(args.t2-args.t1):
         combined, unc = bayesian_aggregation(predictions=results_for_aggregation[t],
                                              uncertainties=uncertainties_for_aggregation[t],
@@ -113,12 +115,23 @@ if __name__ == "__main__":
                                             )
         P_combined.append(combined), unc_combined.append(unc)
         
-        flattened_predictions = [np.array(p).flatten() for p in results_for_aggregation[t]] 
-        # flattened_predictions --> 500 predictions for each model at timestep t
-        # print(flattened_predictions, len(flattened_predictions[0]))
-        flattened_uncertainties = [np.array(u).flatten() for u in uncertainties_for_aggregation[t]]
-        direct_avg, direct_avg_unc = infer_posterior(*flattened_predictions, uncertainties=flattened_uncertainties)
+        # flattened_predictions = [np.array(p).flatten() for p in results_for_aggregation[t]] 
+        # # flattened_predictions --> 500 predictions for each model at timestep t
+        # # print(flattened_predictions, len(flattened_predictions[0]))
+        # flattened_uncertainties = [np.array(u).flatten() for u in uncertainties_for_aggregation[t]]
+        # lowest_unc, lowest_unc_unc = infer_posterior(*flattened_predictions, 
+        #                                              uncertainties=flattened_uncertainties, 
+        #                                              normalization_method=rank_normalization)
+        
+        direct_avg, direct_avg_unc = direct_averaging(predictions=results_for_aggregation[t],
+                                                      uncertainties=uncertainties_for_aggregation[t],
+                                                      normalization_method=rank_normalization
+                                                     )
         P_direct_avg.append(direct_avg), unc_direct_avg.append(direct_avg_unc)
+
+        lowest_unc, lowest_unc_unc = uncertainty_based_selection(predictions=results_for_aggregation[t],
+                                                                 uncertainties=uncertainties_for_aggregation[t])
+        P_lowest_unc.append(lowest_unc), unc_lowest_unc.append(lowest_unc_unc)
 
     # print("P_combined: ", len(P_combined), len(P_combined[0])) # 500 * 40
     # print("ground_truths: ", len(ground_truths), len(ground_truths[0])) # 40
@@ -126,11 +139,16 @@ if __name__ == "__main__":
     # Calculate metrics for aggregated predictions
     all_acc_agg, all_f1_agg, all_log_likelihood_agg = [], [], []
     all_acc_avg, all_f1_avg, all_log_likelihood_avg = [], [], []
+    all_acc_low, all_f1_low, all_log_likelihood_low = [], [], []
     for i in range(len(P_combined)):
         acc_agg, f1_agg, log_likelihood_agg = compute_metrics(P_combined[i], ground_truths[i])
         all_acc_agg.append(acc_agg), all_f1_agg.append(f1_agg), all_log_likelihood_agg.append(log_likelihood_agg)
+
         acc_avg, f1_avg, log_likelihood_avg = compute_metrics(P_direct_avg[i], ground_truths[i])
         all_acc_avg.append(acc_avg), all_f1_avg.append(f1_avg), all_log_likelihood_avg.append(log_likelihood_avg)
+
+        acc_lowest_unc, f1_lowest_unc, log_likelihood_lowest_unc = compute_metrics(P_lowest_unc[i], ground_truths[i])
+        all_acc_low.append(acc_lowest_unc), all_f1_low.append(f1_lowest_unc), all_log_likelihood_low.append(log_likelihood_lowest_unc)
 
     # Plot performance curves for each metric
     timesteps = np.arange(args.t1, args.t2)
@@ -144,6 +162,11 @@ if __name__ == "__main__":
         "F1 Score": all_f1_avg,
         "Log Likelihood": all_log_likelihood_avg
     }
+    lowest_unc_metrics = {
+        "Accuracy": all_acc_low,
+        "F1 Score": all_f1_low,
+        "Log Likelihood": all_log_likelihood_low
+    }
 
     for metric_name, metric_key in zip(["Accuracy", "F1 Score", "Log Likelihood"],
                                     ["accuracies", "f1_scores", "log_likelihoods"]):
@@ -154,6 +177,7 @@ if __name__ == "__main__":
             *model_metrics,
             metric_agg=[np.mean(agg_metric) for agg_metric in aggregated_metrics[metric_name]],
             metric_avg=[np.mean(avg_metric) for avg_metric in averaged_metrics[metric_name]],
+            metric_low=[np.mean(low_metric) for low_metric in lowest_unc_metrics[metric_name]],
             metric_name=metric_name,
             model_labels=args.models,
             separate_axes=True
@@ -165,6 +189,7 @@ if __name__ == "__main__":
         model_results=model_results,
         combined_uncertainty=unc_combined,
         direct_avg_uncertainty=unc_direct_avg,
+        lowest_uncertainty=unc_lowest_unc,
         models=args.models
     )
 
