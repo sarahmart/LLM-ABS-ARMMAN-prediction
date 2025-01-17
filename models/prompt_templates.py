@@ -212,7 +212,7 @@ def bin_prompt_v1():
     decide whether you will be engaged with the next automated health message.
 
     **Key Consideration:** Engagement at one week does not imply engagement at the next (and the same for lack of engagement). 
-    Engagement should also depend on your specific circumstances that week (e.g. phone availablility, schedule, etc.), which may fluctuate.
+    Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
     Being unable to answer a call that week implies a lack of engagement for that week.
 
     **Question:** Will you be engaged with the next automated health message?
@@ -254,7 +254,7 @@ def bin_prompt_v2():
     **Key Consideration:** If you listen to a message for more than 30 seconds, it indicates that you are engaged with the program. Listening for less than 30 seconds suggests a lack of engagement.
 
     **Key Consideration:** Engagement at one week does not imply engagement at the next (and the same for lack of engagement). 
-    Engagement should also depend on your specific circumstances that week (e.g. phone availablility, schedule, etc.), which may fluctuate.
+    Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
     Being unable to answer a call that week implies a lack of engagement for that week.
 
     **Question:** Will you be engaged with the next automated health message?
@@ -276,7 +276,7 @@ def bin_prompt_v3():
       {past_behavior}
 
     **Key Consideration:** Engagement at one week does not imply engagement at the next (and the same for lack of engagement). 
-    Engagement should also depend on your specific circumstances that week (e.g. phone availablility, schedule, etc.), which may fluctuate.
+    Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
     Being unable to answer a call that week implies a lack of engagement for that week.
 
     **Question:** Will you be engaged with the next automated health message?
@@ -414,7 +414,7 @@ def starting_prompt_v1():
             - You have experienced {s} stillbirth(s) and have {l} living child(ren).
 
             **Key Consideration:** 
-            Engagement should also depend on your specific circumstances that week (e.g. phone availablility, schedule, etc.), which may fluctuate.
+            Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
             Being unable to answer a call that week implies a lack of engagement for that week.
 
             **Question:** As you receive the first automated health message, how long will you listen to it?
@@ -452,7 +452,7 @@ def starting_prompt_v2():
             **Key Consideration:** If you listen to a message for more than 30 seconds, it indicates that you are engaged with the program. Listening for less than 30 seconds suggests a lack of engagement.
 
             **Key Consideration:** 
-            Engagement should also depend on your specific circumstances that week (e.g. phone availablility, schedule, etc.), which may fluctuate.
+            Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
             Being unable to answer a call that week implies a lack of engagement for that week.
 
             **Question:** Will you be engaged with the first automated health message?
