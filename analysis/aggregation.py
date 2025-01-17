@@ -55,6 +55,7 @@ def compute_metrics(P_combined, ground_truths, threshold=0.5):
     
     return accuracy, f1, log_likelihood
 
+
 def restructure_predictions(all_individual_predictions): # 2 * 2 * 5 * 5
     # matrix 1 : 1 * 2 * 5 * 5 
     # matrix 2 : 1 * 2 * 5 * 5
@@ -175,8 +176,8 @@ def uncertainty_based_selection(predictions, uncertainties):
     Returns:
     - P_combined: Combined posterior probability of engagement, selecting the lowest uncertainty for each sample 
                   (array of shape [num_samples]).
-    # - P_combined_uncertainty: Lowest uncertainty value corresponding to the selected model prediction for each sample
-    #                           (array of shape [num_samples]).
+    - P_combined_uncertainty: Lowest uncertainty value corresponding to the selected model prediction for each sample
+                              (array of shape [num_samples]).
     """
     # Stack predictions and uncertainties into arrays of shape [num_samples, num_models]
     predictions = np.stack(predictions, axis=1)
@@ -187,13 +188,15 @@ def uncertainty_based_selection(predictions, uncertainties):
 
     # Select lowest uncertainty predictions
     P_combined = predictions[np.arange(predictions.shape[0]), min_uncertainty_indices]
+    lowest_uncertainties = uncertainties[np.arange(uncertainties.shape[0]), min_uncertainty_indices]
     
-    return P_combined
+    return P_combined, lowest_uncertainties
 
 
 def bayesian_aggregation(predictions, uncertainties, normalization_method=None):
     """
-    Aggregate predictions from multiple models using Bayesian weighting with a linear combination.
+    Uncertainty-weighted aggregation:
+    Aggregates predictions from multiple models using Bayesian weighting with a linear combination.
 
     Args:
     - predictions: List of arrays, where each array is the probability of engagement predicted by a model 
