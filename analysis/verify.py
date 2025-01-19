@@ -10,7 +10,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_arms", type=int, default=500, help="Number of mothers to simulate.")
-    parser.add_argument("--models", nargs='+', default=["anthropic", "google", "openai", "openaiheavy"], help="List of LLM models used in evals.")
+    parser.add_argument("--models", nargs='+', default=["anthropic", "google", "googlepro", "openai", "openaiheavy"], help="List of LLM models used in evals.")
     parser.add_argument("--t1", type=int, default=0, help="Start month for LLM predictions.")
     parser.add_argument("--t2", type=int, default=40, help="End month for LLM predictions.")
 
@@ -35,7 +35,6 @@ if __name__ == "__main__":
     log_likelihoods_agg, log_likelihoods_avg = [], []
 
     for model in args.models:
-        # print(model)
         model_data = model_results[model] # dict for this model
 
         # Load predictions and ground truths
@@ -45,10 +44,8 @@ if __name__ == "__main__":
         )
 
         # print("RESHAPED ------------")
-        print(f"predictions: {len(all_individual_preds)}, {len(all_individual_preds[0])}, {len(all_individual_preds[0][0])}")
         all_individual_preds = np.reshape(all_individual_preds, (args.t2-args.t1, args.num_arms, 5, 5))
         ground_truths = np.squeeze(ground_truths)
-        # ground_truths = np.reshape(ground_truths, (args.num_arms, args.t2-args.t1))
         # print(f"predictions: {len(all_individual_preds)}, {len(all_individual_preds[0])}, {len(all_individual_preds[0][0])}, {len(all_individual_preds[0][0][0])}")
         # print(f"Ground truths: {len(ground_truths)}, {len(ground_truths[0])}") 
 
@@ -77,7 +74,6 @@ if __name__ == "__main__":
         for time_mat in timestep_ind_preds:
             epistemic_uncertainty, _, _ = compute_uncertainties_from_llm_predictions(time_mat) 
             epistemic_uncertainty = np.squeeze(epistemic_uncertainty)
-            # print("epistemic_uncertainty: ", len(epistemic_uncertainty))
             model_data["epistemic_uncertainty"].append(epistemic_uncertainty)
 
         # Loop over timesteps for accuracy and aggregation calcs
