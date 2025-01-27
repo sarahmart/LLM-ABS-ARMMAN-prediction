@@ -132,9 +132,9 @@ def infer_posterior(*predictions, uncertainties=None, normalization_method=None)
     - avg_uncertainty: Average uncertainty across models w.out weighting (array of shape [num_samples]).
     """
 
-    # Normalize uncertainties (if specified)
-    if normalization_method is not None:
-        uncertainties = [normalization_method(u) for u in uncertainties]
+    # Normalize uncertainties across models (if normalization_method)
+    if normalization_method is not None and uncertainties is not None:
+        uncertainties = normalization_method(uncertainties) 
 
     # Start with first model's predictions as initial prior
     P_posterior = predictions[0]
@@ -153,7 +153,7 @@ def infer_posterior(*predictions, uncertainties=None, normalization_method=None)
         epsilon = 1e-10
         P_posterior = numerator / (denominator + epsilon)
 
-    # Calculate average uncertainty across models (new lines added)
+    # Calculate average uncertainty across models
     if uncertainties is not None:
         avg_uncertainty = np.mean(uncertainties, axis=0)
     else:
@@ -180,9 +180,9 @@ def uncertainty_based_selection(predictions, uncertainties, normalization_method
                               (array of shape [num_samples]).
     """
 
-    # Normalize uncertainties (if specified)
-    if normalization_method is not None:
-        uncertainties = [normalization_method(u) for u in uncertainties]
+    # Normalize uncertainties across models (if normalization_method)
+    if normalization_method is not None and uncertainties is not None:
+        uncertainties = normalization_method(uncertainties) 
     
     # Stack predictions and uncertainties into arrays of shape [num_samples, num_models]
     predictions = np.stack(predictions, axis=1)
@@ -200,25 +200,26 @@ def uncertainty_based_selection(predictions, uncertainties, normalization_method
 
 def direct_averaging(predictions, uncertainties, normalization_method=None):
     """
-    Aggregates predictions from multiple models by averaging across predictions.
+    Aggregates predictions from multiple models by averaging across predictions 
+    and normalizing uncertainties across models.
 
     Args:
     - predictions: List of arrays, where each array is the probability of engagement predicted by a model 
                    (each array should have shape [num_samples]).
     - uncertainties: List of arrays, where each array is the epistemic uncertainty of the corresponding model's predictions 
                      (each array should have shape [num_samples]).
-    - normalization_method: Function to normalize uncertainties from normalization.py.
+    - normalization_method: Function to normalize uncertainties across models.
 
     Returns:
     - P_avg: Average probability of engagement across models (array of shape [num_samples]).
-    - avg_uncertainty: Average uncertainty across models (array of shape [num_samples]).
+    - avg_uncertainty: Normalized average uncertainty across models (array of shape [num_samples]).
     """
 
-    # Normalize uncertainties (if specified)
-    if normalization_method is not None:
-        uncertainties = [normalization_method(u) for u in uncertainties]  
+    # Normalize uncertainties across models (if normalization_method)
+    if normalization_method is not None and uncertainties is not None:
+        uncertainties = normalization_method(uncertainties)  
 
-    # Avg predictions and uncertainties across models
+    # Average predictions across models
     P_avg = np.mean(predictions, axis=0)
     P_avg = np.clip(P_avg, 0, 1)
 
@@ -227,7 +228,7 @@ def direct_averaging(predictions, uncertainties, normalization_method=None):
         print("Warning: NaN values detected in P_avg. Replacing with 0.5.")
         P_avg = np.nan_to_num(P_avg, nan=0.5)
 
-    # Calculate average uncertainty across models (new lines added)
+    # Calculate average uncertainty across models --> FIX, this isn't correct 
     if uncertainties is not None:
         avg_uncertainty = np.mean(uncertainties, axis=0)
     else:
@@ -252,16 +253,18 @@ def bayesian_aggregation(predictions, uncertainties, normalization_method=None):
     - P_combined: Combined posterior probability of engagement (array of shape [num_samples]).
     """
 
-    # Normalize uncertainties (if specified)
-    if normalization_method is not None:
-        uncertainties = [normalization_method(u) for u in uncertainties]
+    # Normalize uncertainties across models (if normalization_method)
+    if normalization_method is not None and uncertainties is not None:
+        uncertainties = normalization_method(uncertainties) 
 
     # Add small epsilon to avoid zero division w near-zero uncertainties
     epsilon = 1e-10
     uncertainties = [np.array(u) + epsilon for u in uncertainties]
+    # print(uncertainties)
     
     # Convert epistemic uncertainties to precision (tau)
     precisions = [1 / u for u in uncertainties]
+    # print(f"precisions: {precisions}")
     
     # Sum precisions to compute denominator for each point
     total_precision = np.sum(precisions, axis=0)
