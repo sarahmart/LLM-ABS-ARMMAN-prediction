@@ -2,73 +2,124 @@ import numpy as np
 from scipy.stats import rankdata
 
 
-def z_score_normalization(sigma2):
+def z_score_normalization(uncertainties):
     """
-    Normalize uncertainties using Z-score normalization.
-    
+    Normalize uncertainties across models using Z-score normalization.
+
     Args:
-    - sigma2: Array of uncertainty values for the model.
-    
+    - uncertainties: List of arrays, where each array represents the uncertainty values for a model 
+                     (each array should have shape [num_samples]).
+
     Returns:
-    - sigma2_norm: Z-score normalized uncertainties.
+    - normalized_uncertainties: List of arrays, where each array represents Z-score normalized uncertainties
+                                across models for each mother and timestep.
     """
-    mean = np.mean(sigma2)
-    std_dev = np.std(sigma2)
     
+    # Convert list of arrays into 2D array (models x samples)
+    uncertainties_array = np.array(uncertainties)
+
+    # Compute mean and std deviation across models
+    mean = np.mean(uncertainties_array, axis=0)
+    std_dev = np.std(uncertainties_array, axis=0)
+
     # Z-score normalization
-    sigma2_norm = (sigma2 - mean) / std_dev
-    return sigma2_norm
+    z_scores = (uncertainties_array - mean) / (std_dev + 1e-10)
+
+    return [z_scores[i, :] for i in range(z_scores.shape[0])]
 
 
-def log_normalization(sigma2):
+def log_normalization(uncertainties):
     """
-    Normalize uncertainties using logarithmic normalization.
-    
+    Normalize uncertainties across models using log normalization.
+
     Args:
-    - sigma2: Array of uncertainty values for the model.
-    
+    - uncertainties: List of arrays, where each array represents the uncertainty values for a model 
+                     (each array should have shape [num_samples]).
+
     Returns:
-    - sigma2_norm: Logarithmic normalized uncertainties.
+    - normalized_uncertainties: List of arrays, where each array represents logarithmically normalized uncertainties
+                                across models for each mother and timestep.
     """
+
+    # Convert list of arrays to 2D array (models x samples)
+    uncertainties_array = np.array(uncertainties) 
+
     # Apply log transformation
-    sigma2_norm = np.log(1 + sigma2)
-    return sigma2_norm
+    log_normalized = np.log(1 + uncertainties_array)
+
+    return [log_normalized[i, :] for i in range(log_normalized.shape[0])]
 
 
-def rank_normalization(sigma2):
+def rank_normalization(uncertainties):
     """
-    Normalize uncertainties using percentile rank normalization.
-    (focus on the relative ranking/order of values)
-    
+    Normalize uncertainties across models for each mother and timestep using percentile rank normalization.
+
     Args:
-    - sigma2: Array of uncertainty values for the model.
-    
+    - uncertainties: List of arrays, where each array represents the uncertainty values for a model 
+                     (each array should have shape [num_samples]).
+
     Returns:
-    - sigma2_norm: Percentile rank normalized uncertainties.
+    - normalized_uncertainties: List of arrays, where each array represents the normalized uncertainties for a model,
+                                normalized across models for each mother and timestep.
     """
-    # Get rank of each value in sigma2
-    ranks = rankdata(sigma2, method='min')
-    # Normalize ranks to a [0, 1] range
-    sigma2_norm = ranks / len(sigma2)
-    return sigma2_norm
-
-
-def min_max_normalization(sigma2_LLM, sigma2_MC):
-    """
-    Normalize uncertainties for both models together using min-max normalization.
+    # Convert list of arrays to 2D array w shape (num_models, num_samples)
+    uncertainties_array = np.array(uncertainties)  
     
+    # rank normalization across models for each sample
+    ranks = np.apply_along_axis(rankdata, axis=0, arr=uncertainties_array, method='min')
+    
+    # Normalize ranks to [0, 1] for each sample
+    normalized_uncertainties = ranks / ranks.shape[0]
+    
+    return [normalized_uncertainties[i, :] for i in range(normalized_uncertainties.shape[0])] 
+
+
+def min_max_normalization(uncertainties):
+    """
+    Normalize uncertainties across all models using min-max normalization.
+
     Args:
-    - sigma2_LLM: Array of LLM uncertainties.
-    - sigma2_MC: Array of MC uncertainties.
-    
-    Returns:
-    - sigma2_LLM_norm: Normalized LLM uncertainties.
-    - sigma2_MC_norm: Normalized MC uncertainties.
-    """
-    combined_min = min(np.min(sigma2_LLM), np.min(sigma2_MC))
-    combined_max = max(np.max(sigma2_LLM), np.max(sigma2_MC))
+    - uncertainties: List of arrays, where each array represents the uncertainty values for a model 
+                     (each array should have shape [num_samples]).
 
-    sigma2_LLM_norm = (sigma2_LLM - combined_min) / (combined_max - combined_min)
-    sigma2_MC_norm = (sigma2_MC - combined_min) / (combined_max - combined_min)
+    Returns:
+    - normalized_uncertainties: List of arrays, where each array represents normalized uncertainties
+                                for a model (normalized across all models).
+    """
+
+    # Convert list of arrays into a 2D array (models x samples)
+    uncertainties_array = np.array(uncertainties)  
     
-    return sigma2_LLM_norm, sigma2_MC_norm
+    # Calculate global min and max
+    combined_min = np.min(uncertainties_array)
+    combined_max = np.max(uncertainties_array)
+
+    normalized_uncertainties_array = (uncertainties_array - combined_min) / (combined_max - combined_min)
+
+    return [normalized_uncertainties_array[i, :] for i in range(normalized_uncertainties_array.shape[0])]
+
+
+def min_max_normalization_per_timestep(uncertainties):
+    """
+    Normalize uncertainties across models for each timestep using min-max normalization.
+
+    Args:
+    - uncertainties: List of arrays, where each array represents the uncertainty values for a model 
+                     (each array should have shape [num_samples]).
+
+    Returns:
+    - normalized_uncertainties: List of arrays, where each array represents normalized uncertainties
+                                for a model, normalized across models for each timestep.
+    """
+    # Convert list of arrays into a 2D array (models x samples)
+    uncertainties_array = np.array(uncertainties)  # Shape: (num_models, num_samples)
+
+    # Compute min and max across models for each sample (axis=0)
+    combined_min = np.min(uncertainties_array, axis=0)  # Min for each timestep
+    combined_max = np.max(uncertainties_array, axis=0)  # Max for each timestep
+
+    # Apply min-max normalization for each sample
+    normalized_uncertainties_array = (uncertainties_array - combined_min) / (combined_max - combined_min + 1e-10)
+
+    # Return as a list of arrays
+    return [normalized_uncertainties_array[i, :] for i in range(normalized_uncertainties_array.shape[0])]
