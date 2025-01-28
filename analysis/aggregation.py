@@ -32,13 +32,9 @@ def compute_metrics(P_combined, ground_truths, threshold=0.5):
     # Ensure ground truths are binary integers
     ground_truths = np.array(ground_truths).astype(int)
     
-    # Binarize the predictions based on threshold and ensure they are integers
+    # Binarize predictions based on threshold
     P_combined = np.array(P_combined)
     predictions = (P_combined >= threshold).astype(int)
-
-    # Check if predictions and ground_truths are actually binary (0 or 1)
-    # print(f"Unique values in predictions: {np.unique(predictions)}")
-    # print(f"Unique values in ground_truths: {np.unique(ground_truths)}")
     
     # Compute accuracy
     accuracy = accuracy_score(ground_truths, predictions)
@@ -100,6 +96,10 @@ def compute_uncertainties_from_llm_predictions(all_individual_predictions):
     for arm_predictions in all_individual_predictions:
         # Convert list of predictions into a numpy array (shape: [num_queries])
         arm_predictions = np.array(arm_predictions)
+
+        # Add small random noise to avoid determinisism
+        arm_predictions = arm_predictions + np.random.normal(0, 1e-5, size=arm_predictions.shape)
+        arm_predictions = np.clip(arm_predictions, 1e-10, 1 - 1e-10)
 
         # Mean prediction across queries for this arm
         mean_prediction = np.mean(arm_predictions)
