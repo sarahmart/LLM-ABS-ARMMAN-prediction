@@ -52,7 +52,7 @@ def plot_performance_vs_month_new(months, *metrics,
                                   metric_name, model_labels=None, separate_axes=False):
     """
     Plot performance metric vs. month for multiple models and baselines, 
-    with an option to use subplots for each model.
+    with an option to use subplots for adjacent pairs of models.
 
     Args:
     - months: List of months.
@@ -62,7 +62,7 @@ def plot_performance_vs_month_new(months, *metrics,
     - metric_low: Metric values for lowest uncertainty model.
     - metric_name: Name of the metric (e.g., 'Accuracy', 'F1 Score', 'Log Likelihood').
     - model_labels: List of labels for each model (default is 'Model 1', 'Model 2', ...).
-    - separate_axes: If True, create subplots with one axis per model.
+    - separate_axes: If True, create subplots for adjacent pairs of models.
     """
 
     if model_labels is None:
@@ -72,24 +72,24 @@ def plot_performance_vs_month_new(months, *metrics,
         # Plot all models on the same axes
 
         plt.figure(figsize=(10, 6))
-        cmap = matplotlib.colormaps['Blues']
-        colors = [cmap(0.5 + 0.3 * i / (len(metrics) - 1)) for i in range(len(metrics))]
+        cmap = matplotlib.colormaps['Paired']  # Use a categorical colormap
+        colors = [cmap(i / (len(metrics))) for i in range(len(metrics))]
 
         # Plot metrics for each model
         for metric, label, color in zip(metrics, model_labels, colors):
-            plt.plot(months, metric, label=label, marker='o', linestyle='--', color=color, alpha=0.7)
+            plt.plot(months, metric, label=label, marker='o', linestyle='..', color=color, alpha=0.7)
 
         # Plot direct average performance
         if any(metric_avg):
-            plt.plot(months, metric_avg, label='Direct Averaging', marker='o', color='orchid')
+            plt.plot(months, metric_avg, label='Direct Averaging', marker='o', color='purple')
 
         # Plot lowest uncertainty model performance
         if any(metric_low):
-            plt.plot(months, metric_low, label='Lowest Uncertainty Model', marker='o', color='lightgreen')
+            plt.plot(months, metric_low, label='Lowest Uncertainty Model', marker='o', color='#DC143C')
 
         # Plot aggregated performance
         if any(metric_agg):
-            plt.plot(months, metric_agg, label='Uncertainty-weighted Aggregation', marker='o', linewidth=2.5, color='orange')
+            plt.plot(months, metric_agg, label='Uncertainty-weighted Aggregation', marker='o', linewidth=2.5, color='g')
 
         plt.xlabel("Week Since Program Start")
         plt.ylabel(metric_name)
@@ -100,36 +100,61 @@ def plot_performance_vs_month_new(months, *metrics,
         plt.show()
 
     else:
-        # subplots for each model
-        fig, axes = plt.subplots(math.ceil(len(metrics)/2), 2, 
-                                 figsize=(13, 4*math.ceil(len(metrics)/2)), 
-                                 sharex=True, sharey=True)
+        # Create subplots for adjacent pairs of models
+        num_pairs = (len(metrics) + 1) // 2 
+        num_cols = 1
+        num_rows = math.ceil(num_pairs / num_cols)
+
+        fig, axes = plt.subplots(num_rows, num_cols, 
+                                 figsize=(10, 3 * num_rows), 
+                                 sharey=False, sharex=True)
         axes = axes.flatten()
-        cmap = matplotlib.colormaps['Blues']
+        cmap = matplotlib.colormaps['Paired']
+        colors = [cmap(i) for i in range(12)]
+        colors = [colors[i] for i in [0,1,2,3,6,7,8,9,4,5,10,11]]
+        labels = ['Google', 'OpenAI', 'Anthropic']
 
-        for i, (metric, label, ax) in enumerate(zip(metrics, model_labels, axes)):
-            color = cmap(0.5 + 0.3 * i / (len(metrics) - 1))
+        for idx in range(num_pairs):
+            ax = axes[idx]
 
-            # Plot the specific model's results
-            ax.plot(months, metric, label=label, marker='o', linestyle='--', color=color, alpha=0.7)
+            model1_idx = idx * 2
+            metric1 = metrics[model1_idx]
+            label1 = model_labels[model1_idx]
+            ax.plot(months, metric1, label=label1, marker='o', markersize=3, linestyle='-.', color=colors[model1_idx], alpha=1)
+
+            if model1_idx <= len(metrics)-1: # else odd number of models
+                model2_idx = min(model1_idx + 1, len(metrics) - 1)  
+                metric2 = metrics[model2_idx]
+                label2 = model_labels[model2_idx]
+                ax.plot(months, metric2, label=label2, marker='o', markersize=3, linestyle='-.', color=colors[model2_idx], alpha=1)
 
             # Plot direct average performance
             if any(metric_avg):
-                ax.plot(months, metric_avg, label='Direct Averaging', marker='o', color='orchid')
+                ax.plot(months, metric_avg, label='Direct Averaging', 
+                        marker='o', markersize=3, color='k')
 
             # Plot lowest uncertainty model performance
             if any(metric_low):
-                ax.plot(months, metric_low, label='Lowest Uncertainty', marker='o', color='lightgreen')
+                ax.plot(months, metric_low, label='Lowest Uncertainty', 
+                        marker='o', markersize=3, color='grey') #'#DC143C')
 
             # Plot aggregated performance
             if any(metric_agg):
-                ax.plot(months, metric_agg, label='Uncertainty-weighted Aggregation', marker='o', linewidth=2.5, color='orange')
+                ax.plot(months, metric_agg, label='Uncertainty-weighted Aggregation', 
+                        marker='o', markersize=3, color='#DC143C') #'orange')
 
-            ax.set_xlabel("Week Since Program Start")
-            ax.set_ylabel(metric_name)
-            ax.set_title(f"{label} - {metric_name}")
-            ax.legend()
-            ax.grid(True)
+            # Subplot config
+            ax.set_ylabel(metric_name, fontsize=12)
+            # ax.set_title(f"{metric_name} of {label1} vs {label2} - ")
+            ax.set_title(f"{labels[idx]}", fontsize=14)
+            ax.legend(fontsize=12, loc='lower left')
+            ax.grid(True, alpha=0.4)
+        axes[-1].set_xlabel("Weeks Since Program Start", fontsize=12)
+        # axes[-1].bbox_to_anchor = (1, 1)
+
+        # Hide unused subplots
+        for idx in range(num_pairs, len(axes)):
+            axes[idx].set_visible(False)
 
         plt.tight_layout()
         plt.savefig(f"{metric_name.replace(' ', '_').lower()}_vs_week_subplots.png")
@@ -153,8 +178,8 @@ def plot_uncertainty_over_time(timesteps, model_results,
     - models: List of model names to include in the plot.
     """
     plt.figure(figsize=(12, 8))
-    cmap = matplotlib.colormaps['Blues']
-    colors = [cmap(0.5 + 0.3 * i / (len(models) - 1)) for i in range(len(models))]
+    cmap = matplotlib.colormaps['Paired']
+    colors = [cmap(i / (len(models))) for i in range(len(models))]
 
     # model uncertainties
     for model, color in zip(models, colors):
@@ -163,15 +188,15 @@ def plot_uncertainty_over_time(timesteps, model_results,
 
     # direct average model uncertainty 
     direct_avg_uncertainty = [np.mean(unc) for unc in direct_avg_uncertainty]
-    plt.plot(timesteps, direct_avg_uncertainty, label="Direct Average Model Uncertainty", marker='o', linestyle='-', color='orchid')
+    plt.plot(timesteps, direct_avg_uncertainty, label="Direct Average Model Uncertainty", marker='o', linestyle='-', color='purple')
 
     # lowest-uncertainty
     lowest_uncertainty = [np.mean(unc) for unc in lowest_uncertainty]
-    plt.plot(timesteps, lowest_uncertainty, label="Lowest Uncertainty Selection", marker='o', linestyle='-', color='lightgreen')
+    plt.plot(timesteps, lowest_uncertainty, label="Lowest Uncertainty Selection", marker='o', linestyle='-', color='#DC143C')
 
     # aggregated model uncertainty
     combined_uncertainty = [np.mean(unc) for unc in combined_uncertainty]
-    plt.plot(timesteps, combined_uncertainty, label="Aggregated Model Uncertainty", marker='o', linestyle='-', linewidth=2.5, color='orange')
+    plt.plot(timesteps, combined_uncertainty, label="Aggregated Model Uncertainty", marker='o', linestyle='-', linewidth=2.5, color='g')
 
     plt.xlabel("Weeks Since Program Start", fontsize=12)
     plt.ylabel("Epistemic Uncertainty", fontsize=12)

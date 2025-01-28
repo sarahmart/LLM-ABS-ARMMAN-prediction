@@ -4,13 +4,14 @@ import numpy as np
 
 from aggregation import *
 from plot import plot_uncertainty_over_time, plot_performance_vs_month_new
-from normalization import rank_normalization
+from normalization import rank_normalization, log_normalization, z_score_normalization, min_max_normalization, min_max_normalization_per_timestep
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_arms", type=int, default=500, help="Number of mothers to simulate.")
-    parser.add_argument("--models", nargs='+', default=["anthropic", "google", "googlepro", "openai", "openaiheavy"], help="List of LLM models used in evals.")
+    parser.add_argument("--models", nargs='+', default=["google", "googlepro", "openai", "openaiheavy", "anthropic"], help="List of LLM models used in evals.")
+    parser.add_argument("--labels", nargs='+', default=["Gemini Flash", "Gemini Pro", "GPT-4o", "GPT-4o mini", "Claude Instant"], help="List of LLM labels for plotting.")
     parser.add_argument("--t1", type=int, default=0, help="Start month for LLM predictions.")
     parser.add_argument("--t2", type=int, default=40, help="End month for LLM predictions.")
 
@@ -107,7 +108,7 @@ if __name__ == "__main__":
     for t in range(args.t2-args.t1):
         combined, unc = bayesian_aggregation(predictions=results_for_aggregation[t],
                                              uncertainties=uncertainties_for_aggregation[t],
-                                             normalization_method=rank_normalization
+                                             normalization_method=min_max_normalization_per_timestep
                                             )
         P_combined.append(combined), unc_combined.append(unc)
         
@@ -121,7 +122,7 @@ if __name__ == "__main__":
         
         direct_avg, direct_avg_unc = direct_averaging(predictions=results_for_aggregation[t],
                                                       uncertainties=uncertainties_for_aggregation[t],
-                                                      normalization_method=rank_normalization
+                                                      normalization_method=min_max_normalization_per_timestep
                                                      )
         P_direct_avg.append(direct_avg), unc_direct_avg.append(direct_avg_unc)
 
@@ -175,19 +176,19 @@ if __name__ == "__main__":
             metric_avg=[np.mean(avg_metric) for avg_metric in averaged_metrics[metric_name]],
             metric_low=[np.mean(low_metric) for low_metric in lowest_unc_metrics[metric_name]],
             metric_name=metric_name,
-            model_labels=args.models,
+            model_labels=args.labels,
             separate_axes=True
         )
 
-    # Plot uncertainty over time
-    plot_uncertainty_over_time(
-        timesteps=timesteps,
-        model_results=model_results,
-        combined_uncertainty=unc_combined,
-        direct_avg_uncertainty=unc_direct_avg,
-        lowest_uncertainty=unc_lowest_unc,
-        models=args.models
-    )
+    # # Plot uncertainty over time
+    # plot_uncertainty_over_time(
+    #     timesteps=timesteps,
+    #     model_results=model_results,
+    #     combined_uncertainty=unc_combined,
+    #     direct_avg_uncertainty=unc_direct_avg,
+    #     lowest_uncertainty=unc_lowest_unc,
+    #     models=args.models
+    # )
 
 
 
