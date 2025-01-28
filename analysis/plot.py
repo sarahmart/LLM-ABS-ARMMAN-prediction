@@ -145,7 +145,6 @@ def plot_performance_vs_month_new(months, *metrics,
 
             # Subplot config
             ax.set_ylabel(metric_name, fontsize=12)
-            # ax.set_title(f"{metric_name} of {label1} vs {label2} - ")
             ax.set_title(f"{labels[idx]}", fontsize=14)
             ax.legend(fontsize=12, loc='lower left')
             ax.grid(True, alpha=0.4)
@@ -159,53 +158,6 @@ def plot_performance_vs_month_new(months, *metrics,
         plt.tight_layout()
         plt.savefig(f"{metric_name.replace(' ', '_').lower()}_vs_week_subplots.png")
         plt.show()
-
-
-def plot_uncertainty_over_time(timesteps, model_results, 
-                               combined_uncertainty, 
-                               direct_avg_uncertainty, 
-                               lowest_uncertainty,
-                               models):
-    """
-    Plot epistemic uncertainty over time for each model, aggregated model, and baselines.
-
-    Args:
-    - timesteps: List of timesteps (e.g., weeks or months).
-    - model_results: Dictionary containing epistemic uncertainty for each model.
-    - combined_uncertainty: Epistemic uncertainty for the aggregated model.
-    - direct_avg_uncertainty: Epistemic uncertainty for the direct average model.
-    - lowest_uncertainty: Epistemic uncertainty for the lowest uncertainty model.
-    - models: List of model names to include in the plot.
-    """
-    plt.figure(figsize=(12, 8))
-    cmap = matplotlib.colormaps['Paired']
-    colors = [cmap(i / (len(models))) for i in range(len(models))]
-
-    # model uncertainties
-    for model, color in zip(models, colors):
-        model_uncertainty = [np.mean(unc) for unc in model_results[model]["epistemic_uncertainty"]]
-        plt.plot(timesteps, model_uncertainty, label=f"{model} Uncertainty", marker='o', linestyle='--', color=color)
-
-    # direct average model uncertainty 
-    direct_avg_uncertainty = [np.mean(unc) for unc in direct_avg_uncertainty]
-    plt.plot(timesteps, direct_avg_uncertainty, label="Direct Average Model Uncertainty", marker='o', linestyle='-', color='purple')
-
-    # lowest-uncertainty
-    lowest_uncertainty = [np.mean(unc) for unc in lowest_uncertainty]
-    plt.plot(timesteps, lowest_uncertainty, label="Lowest Uncertainty Selection", marker='o', linestyle='-', color='#DC143C')
-
-    # aggregated model uncertainty
-    combined_uncertainty = [np.mean(unc) for unc in combined_uncertainty]
-    plt.plot(timesteps, combined_uncertainty, label="Aggregated Model Uncertainty", marker='o', linestyle='-', linewidth=2.5, color='g')
-
-    plt.xlabel("Weeks Since Program Start", fontsize=12)
-    plt.ylabel("Epistemic Uncertainty", fontsize=12)
-    plt.title("Epistemic Uncertainty Over Time", fontsize=14)
-    plt.legend(fontsize=12)
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.tight_layout()
-    plt.savefig('epistemic_uncertainty_over_time.png')
-    plt.show()
 
 
 # def logistic_growth(t, a, b, k, m):

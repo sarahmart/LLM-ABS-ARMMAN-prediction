@@ -3,8 +3,9 @@ import argparse
 import numpy as np
 
 from aggregation import *
-from plot import plot_uncertainty_over_time, plot_performance_vs_month_new
+from plot import plot_performance_vs_month_new
 from normalization import rank_normalization, log_normalization, z_score_normalization, min_max_normalization, min_max_normalization_per_timestep
+from utils import *
 
 if __name__ == "__main__":
 
@@ -14,8 +15,20 @@ if __name__ == "__main__":
     parser.add_argument("--labels", nargs='+', default=["Gemini Flash", "Gemini Pro", "GPT-4o", "GPT-4o mini", "Claude Instant"], help="List of LLM labels for plotting.")
     parser.add_argument("--t1", type=int, default=0, help="Start month for LLM predictions.")
     parser.add_argument("--t2", type=int, default=40, help="End month for LLM predictions.")
+    parser.add_argument("--normalization", type=str, default="rank_normalization", help="Normalization method for uncertainties.")
 
     args = parser.parse_args()
+
+    # Map normalization method strings to actual functions
+    normalization_methods = {
+        "rank_normalization": rank_normalization,
+        "z_score_normalization": z_score_normalization,
+        "log_normalization": log_normalization,
+        "min_max_normalization": min_max_normalization,
+        "min_max_normalization_per_timestep": min_max_normalization_per_timestep,
+        "None": None
+    }
+    normalization_function = normalization_methods.get(args.normalization)
 
     # Dictionary to store results for each model
     model_results = {
@@ -102,33 +115,24 @@ if __name__ == "__main__":
             uncertainties_for_aggregation.setdefault(i, []).append(uncertainty)
 
     
-    P_combined, unc_combined = [], []
-    P_direct_avg, unc_direct_avg = [], []
-    P_lowest_unc, unc_lowest_unc = [], []
+    P_combined, P_direct_avg, P_lowest_unc = [], [], []
     for t in range(args.t2-args.t1):
-        combined, unc = bayesian_aggregation(predictions=results_for_aggregation[t],
-                                             uncertainties=uncertainties_for_aggregation[t],
-                                             normalization_method=min_max_normalization_per_timestep
-                                            )
-        P_combined.append(combined), unc_combined.append(unc)
+        combined = bayesian_aggregation(predictions=results_for_aggregation[t],
+                                        uncertainties=uncertainties_for_aggregation[t],
+                                        normalization_method=normalization_function)
+        P_combined.append(combined)
         
         # flattened_predictions = [np.array(p).flatten() for p in results_for_aggregation[t]] 
         # # flattened_predictions --> 500 predictions for each model at timestep t
-        # # print(flattened_predictions, len(flattened_predictions[0]))
-        # flattened_uncertainties = [np.array(u).flatten() for u in uncertainties_for_aggregation[t]]
-        # lowest_unc, lowest_unc_unc = infer_posterior(*flattened_predictions, 
-        #                                              uncertainties=flattened_uncertainties, 
-        #                                              normalization_method=rank_normalization)
+        # lowest_unc = infer_posterior(*flattened_predictions)
         
-        direct_avg, direct_avg_unc = direct_averaging(predictions=results_for_aggregation[t],
-                                                      uncertainties=uncertainties_for_aggregation[t],
-                                                      normalization_method=min_max_normalization_per_timestep
-                                                     )
-        P_direct_avg.append(direct_avg), unc_direct_avg.append(direct_avg_unc)
+        direct_avg = direct_averaging(predictions=results_for_aggregation[t])
+        P_direct_avg.append(direct_avg)
 
-        lowest_unc, lowest_unc_unc = uncertainty_based_selection(predictions=results_for_aggregation[t],
-                                                                 uncertainties=uncertainties_for_aggregation[t])
-        P_lowest_unc.append(lowest_unc), unc_lowest_unc.append(lowest_unc_unc)
+        lowest_unc = uncertainty_based_selection(predictions=results_for_aggregation[t],
+                                                 uncertainties=uncertainties_for_aggregation[t],
+                                                 normalization_method=normalization_function)
+        P_lowest_unc.append(lowest_unc)
 
     # print("P_combined: ", len(P_combined), len(P_combined[0])) # 500 * 40
     # print("ground_truths: ", len(ground_truths), len(ground_truths[0])) # 40
@@ -179,18 +183,6 @@ if __name__ == "__main__":
             model_labels=args.labels,
             separate_axes=True
         )
-
-    # # Plot uncertainty over time
-    # plot_uncertainty_over_time(
-    #     timesteps=timesteps,
-    #     model_results=model_results,
-    #     combined_uncertainty=unc_combined,
-    #     direct_avg_uncertainty=unc_direct_avg,
-    #     lowest_uncertainty=unc_lowest_unc,
-    #     models=args.models
-    # )
-
-
 
         
     # # Plot correct lowest-k selections for each model

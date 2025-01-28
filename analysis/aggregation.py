@@ -1,18 +1,6 @@
 # imports
 import numpy as np
-import json
 from sklearn.metrics import accuracy_score, f1_score
-
-
-def load_predictions_and_ground_truths(predictions_path, ground_truths_path):
-    """Load saved individual predictions and ground truths from JSON files."""
-    with open(predictions_path, 'r') as f:
-        all_individual_predictions = json.load(f)
-    
-    with open(ground_truths_path, 'r') as f:
-        ground_truths = json.load(f)
-    
-    return all_individual_predictions, ground_truths
 
 
 def compute_metrics(P_combined, ground_truths, threshold=0.5):
@@ -50,25 +38,6 @@ def compute_metrics(P_combined, ground_truths, threshold=0.5):
     ) / len(ground_truths) # normalise by pop size
     
     return accuracy, f1, log_likelihood
-
-
-def restructure_predictions(all_individual_predictions): # 2 * 2 * 5 * 5
-    # matrix 1 : 1 * 2 * 5 * 5 
-    # matrix 2 : 1 * 2 * 5 * 5
-    """
-    Restructure the list of individual predictions into a matrix for each timestep.
-    
-    Args:
-    - all_individual_predictions: List of lists, where each sublist contains multiple predictions for a single arm at each timestep.
-    
-    Returns:
-    - restructured_predictions: List of arrays, where each array contains the predictions for a single timestep.
-    """
-    # Extract matrices for each timestep
-    num_timesteps = all_individual_predictions.shape[0]
-    restructured_predictions = [all_individual_predictions[t, :, :, :] for t in range(num_timesteps)]
-
-    return restructured_predictions
 
 
 def binary_entropy(p):
@@ -112,29 +81,23 @@ def compute_uncertainties_from_llm_predictions(all_individual_predictions):
         individual_entropies = binary_entropy(arm_predictions)
         aleatoric_uncertainty.append(np.mean(individual_entropies))
 
-        # Epistemic uncertainty is the difference between predictive and aleatoric uncertainty
+        # Epistemic uncertainty : difference between predictive and aleatoric uncertainty
         epistemic_uncertainty.append(pred_uncertainty - np.mean(individual_entropies))
 
     return epistemic_uncertainty, aleatoric_uncertainty, predictive_uncertainty
 
 
-def infer_posterior(*predictions, uncertainties=None, normalization_method=None):
+def infer_posterior(*predictions):
     """
-    Infer the posterior probability using multiple models as priors (direct Bayesian averaging of results).
+    Infer the posterior probability using multiple models as priors.
 
     Args:
     - *predictions: A variable number of arrays, where each array represents the probability of engagement
                     predicted by a model (each array should have shape [num_samples]).
-    - uncertainties: Array for each model representing epistemic uncertainties (shape: [num_samples])
 
     Returns:
     - P_posterior: Posterior probability of engagement (array of shape [num_samples]).
-    - avg_uncertainty: Average uncertainty across models w.out weighting (array of shape [num_samples]).
     """
-
-    # Normalize uncertainties across models (if normalization_method)
-    if normalization_method is not None and uncertainties is not None:
-        uncertainties = normalization_method(uncertainties) 
 
     # Start with first model's predictions as initial prior
     P_posterior = predictions[0]
@@ -153,18 +116,12 @@ def infer_posterior(*predictions, uncertainties=None, normalization_method=None)
         epsilon = 1e-10
         P_posterior = numerator / (denominator + epsilon)
 
-    # Calculate average uncertainty across models
-    if uncertainties is not None:
-        avg_uncertainty = np.mean(uncertainties, axis=0)
-    else:
-        avg_uncertainty = None
-
-    return P_posterior, avg_uncertainty
+    return P_posterior
 
 
 def uncertainty_based_selection(predictions, uncertainties, normalization_method=None):
     """
-    Aggregate predictions by selecting the model with the lowest epistemic uncertainty.
+    Aggregate predictions by selecting the model for each arm and timestep with the *lowest epistemic uncertainty*.
     That lowest uncertainty value is the corresponding uncertainty for the now-aggregated prediction.
 
     Args:
@@ -176,8 +133,6 @@ def uncertainty_based_selection(predictions, uncertainties, normalization_method
     Returns:
     - P_combined: Combined posterior probability of engagement, selecting the lowest uncertainty for each sample 
                   (array of shape [num_samples]).
-    - P_combined_uncertainty: Lowest uncertainty value corresponding to the selected model prediction for each sample
-                              (array of shape [num_samples]).
     """
 
     # Normalize uncertainties across models (if normalization_method)
@@ -185,20 +140,21 @@ def uncertainty_based_selection(predictions, uncertainties, normalization_method
         uncertainties = normalization_method(uncertainties) 
     
     # Stack predictions and uncertainties into arrays of shape [num_samples, num_models]
+    # i.e. each row is an arm, each col corr to a model
     predictions = np.stack(predictions, axis=1)
     uncertainties = np.stack(uncertainties, axis=1)
 
-    # Index of model with lowest uncertainty for each
-    min_uncertainty_indices = np.argmin(uncertainties, axis=1)
+    # Models with the minimum uncertainty for each arm
+    min_uncertainty_values = np.min(uncertainties, axis=1)
 
-    # Select lowest uncertainty predictions
-    P_combined = predictions[np.arange(predictions.shape[0]), min_uncertainty_indices]
-    lowest_uncertainties = uncertainties[np.arange(uncertainties.shape[0]), min_uncertainty_indices]
+    # Deal w ties: average predictions if multiple models have same min uncertainty
+    tie_masks = uncertainties == min_uncertainty_values[:, None]
+    P_combined = np.sum(predictions * tie_masks, axis=1) / np.sum(tie_masks, axis=1)
     
-    return P_combined, lowest_uncertainties
+    return P_combined
 
 
-def direct_averaging(predictions, uncertainties, normalization_method=None):
+def direct_averaging(predictions):
     """
     Aggregates predictions from multiple models by averaging across predictions 
     and normalizing uncertainties across models.
@@ -206,18 +162,10 @@ def direct_averaging(predictions, uncertainties, normalization_method=None):
     Args:
     - predictions: List of arrays, where each array is the probability of engagement predicted by a model 
                    (each array should have shape [num_samples]).
-    - uncertainties: List of arrays, where each array is the epistemic uncertainty of the corresponding model's predictions 
-                     (each array should have shape [num_samples]).
-    - normalization_method: Function to normalize uncertainties across models.
 
     Returns:
     - P_avg: Average probability of engagement across models (array of shape [num_samples]).
-    - avg_uncertainty: Normalized average uncertainty across models (array of shape [num_samples]).
     """
-
-    # Normalize uncertainties across models (if normalization_method)
-    if normalization_method is not None and uncertainties is not None:
-        uncertainties = normalization_method(uncertainties)  
 
     # Average predictions across models
     P_avg = np.mean(predictions, axis=0)
@@ -228,13 +176,7 @@ def direct_averaging(predictions, uncertainties, normalization_method=None):
         print("Warning: NaN values detected in P_avg. Replacing with 0.5.")
         P_avg = np.nan_to_num(P_avg, nan=0.5)
 
-    # Calculate average uncertainty across models --> FIX, this isn't correct 
-    if uncertainties is not None:
-        avg_uncertainty = np.mean(uncertainties, axis=0)
-    else:
-        avg_uncertainty = None
-
-    return P_avg, avg_uncertainty
+    return P_avg
 
 
 def bayesian_aggregation(predictions, uncertainties, normalization_method=None):
@@ -256,15 +198,9 @@ def bayesian_aggregation(predictions, uncertainties, normalization_method=None):
     # Normalize uncertainties across models (if normalization_method)
     if normalization_method is not None and uncertainties is not None:
         uncertainties = normalization_method(uncertainties) 
-
-    # Add small epsilon to avoid zero division w near-zero uncertainties
-    epsilon = 1e-10
-    uncertainties = [np.array(u) + epsilon for u in uncertainties]
-    # print(uncertainties)
     
     # Convert epistemic uncertainties to precision (tau)
     precisions = [1 / u for u in uncertainties]
-    # print(f"precisions: {precisions}")
     
     # Sum precisions to compute denominator for each point
     total_precision = np.sum(precisions, axis=0)
@@ -281,120 +217,116 @@ def bayesian_aggregation(predictions, uncertainties, normalization_method=None):
     if np.any(np.isnan(P_combined)):
         print("Warning: NaN values detected in P_combined. Replacing with 0.5.")
         P_combined = np.nan_to_num(P_combined, nan=0.5)  
-
-    # Compute aggregated uncertainty
-    weighted_uncertainties = np.sum([u * tau for u, tau in zip(uncertainties, precisions)], axis=0)
-    unc_combined = weighted_uncertainties / total_precision
     
-    return P_combined, unc_combined
+    return P_combined
 
 
-def identify_discrepancies(P_LLM, P_MC, ground_truths, threshold=0.5):
-    """
-    Identify indices (arms) where one model (LLM or MC) is correct and the other is incorrect.
+# def identify_discrepancies(P_LLM, P_MC, ground_truths, threshold=0.5):
+#     """
+#     Identify indices (arms) where one model is correct and the other is incorrect.
     
-    Args:
-    - P_LLM: Predictions from the LLM model.
-    - P_MC: Predictions from the MC model.
-    - ground_truths: Ground truth labels.
-    - threshold: Threshold to classify predictions as engaged or not engaged.
+#     Args:
+#     - P_LLM: Predictions from the LLM model.
+#     - P_MC: Predictions from the MC model.
+#     - ground_truths: Ground truth labels.
+#     - threshold: Threshold to classify predictions as engaged or not engaged.
 
-    Returns:
-    - correct_llm_incorrect_mc: Indices where LLM is correct and MC is incorrect.
-    - correct_mc_incorrect_llm: Indices where MC is correct and LLM is incorrect.
-    """
-    predictions_llm = (P_LLM >= threshold).astype(int)
-    predictions_mc = (P_MC >= threshold).astype(int)
+#     Returns:
+#     - correct_llm_incorrect_mc: Indices where LLM is correct and MC is incorrect.
+#     - correct_mc_incorrect_llm: Indices where MC is correct and LLM is incorrect.
+#     """
+#     predictions_llm = (P_LLM >= threshold).astype(int)
+#     predictions_mc = (P_MC >= threshold).astype(int)
     
-    correct_llm = (predictions_llm == ground_truths)
-    correct_mc = (predictions_mc == ground_truths)
+#     correct_llm = (predictions_llm == ground_truths)
+#     correct_mc = (predictions_mc == ground_truths)
     
-    correct_llm_incorrect_mc = np.where((correct_llm == 1) & (correct_mc == 0))[0]
-    correct_mc_incorrect_llm = np.where((correct_mc == 1) & (correct_llm == 0))[0]
+#     correct_llm_incorrect_mc = np.where((correct_llm == 1) & (correct_mc == 0))[0]
+#     correct_mc_incorrect_llm = np.where((correct_mc == 1) & (correct_llm == 0))[0]
     
-    return correct_llm_incorrect_mc, correct_mc_incorrect_llm
+#     return correct_llm_incorrect_mc, correct_mc_incorrect_llm
 
 
-def compare_confidence(correct_indices, P_LLM, P_MC, sigma2_LLM, sigma2_MC, ground_truths, eval_by='uncertainty'):
-    """
-    Check whether the model with lower epistemic uncertainty (higher confidence)
-    actually had a correct solution based on 
-        1. epistemic uncertainty OR
-        2. average probability.
+# def compare_confidence(correct_indices, P_LLM, P_MC, sigma2_LLM, sigma2_MC, ground_truths, eval_by='uncertainty'):
+#     """
+#     Check whether the model with lower epistemic uncertainty (higher confidence)
+#     actually had a correct solution based on 
+#         1. epistemic uncertainty OR
+#         2. average probability.
     
-    Args:
-    - correct_indices: Indices where one model is correct and the other is incorrect.
-    - P_LLM: Predictions from the LLM model.
-    - P_MC: Predictions from the MC model.
-    - sigma2_LLM: Epistemic uncertainty of the LLM model.
-    - sigma2_MC: Epistemic uncertainty of the MC model.
-    - ground_truths: Ground truth labels (binary, array of shape [num_samples]).
-    - eval_by: Whether to evaluate based on 'uncertainty' or 'probability' (str).
+#     Args:
+#     - correct_indices: Indices where one model is correct and the other is incorrect.
+#     - P_LLM: Predictions from the LLM model.
+#     - P_MC: Predictions from the MC model.
+#     - sigma2_LLM: Epistemic uncertainty of the LLM model.
+#     - sigma2_MC: Epistemic uncertainty of the MC model.
+#     - ground_truths: Ground truth labels (binary, array of shape [num_samples]).
+#     - eval_by: Whether to evaluate based on 'uncertainty' or 'probability' (str).
     
-    Returns:
-    - How often the lower uncertainty model was correct (for that timestep) ito
-        1. epistemic uncertainty OR
-        2. average probability.
-    """
+#     Returns:
+#     - How often the lower uncertainty model was correct (for that timestep) ito
+#         1. epistemic uncertainty OR
+#         2. average probability.
+#     """
 
-    selected_and_correct = 0
-    for idx in correct_indices:
+#     selected_and_correct = 0
+#     for idx in correct_indices:
 
-        if eval_by == 'uncertainty':
-            # Check which model has lower epistemic uncertainty
-            if sigma2_LLM[idx] < sigma2_MC[idx]:  # LLM has lower uncertainty
-                selected_prediction = P_LLM[idx]
-            else:  # MC has lower uncertainty
-                selected_prediction = P_MC[idx]
+#         if eval_by == 'uncertainty':
+#             # Check which model has lower epistemic uncertainty
+#             if sigma2_LLM[idx] < sigma2_MC[idx]:  # LLM has lower uncertainty
+#                 selected_prediction = P_LLM[idx]
+#             else:  # MC has lower uncertainty
+#                 selected_prediction = P_MC[idx]
         
-        elif eval_by == 'probability':
-            # Check which model has higher average probability
-            if P_LLM[idx] > P_MC[idx]:
-                selected_prediction = P_LLM[idx]
-            else:
-                selected_prediction = P_MC[idx]
+#         elif eval_by == 'probability':
+#             # Check which model has higher average probability
+#             if P_LLM[idx] > P_MC[idx]:
+#                 selected_prediction = P_LLM[idx]
+#             else:
+#                 selected_prediction = P_MC[idx]
         
-        # Check if selected model's prediction was correct
-        if (selected_prediction >= 0.5) == ground_truths[idx]:
-            selected_and_correct += 1
+#         # Check if selected model's prediction was correct
+#         if (selected_prediction >= 0.5) == ground_truths[idx]:
+#             selected_and_correct += 1
     
-    return selected_and_correct / len(correct_indices) if len(correct_indices) > 0 else 0
+#     return selected_and_correct / len(correct_indices) if len(correct_indices) > 0 else 0
 
 
-def analyze_improvement(correct_llm_incorrect_mc, correct_mc_incorrect_llm, P_combined, ground_truths):
-    """
-    How often using the OTHER model's prediction would have improved the aggregated model
-    (when only one of the models is correct).
+# def analyze_improvement(correct_llm_incorrect_mc, correct_mc_incorrect_llm, P_combined, ground_truths):
+#     """
+#     How often using the OTHER model's prediction would have improved the aggregated model
+#     (when only one of the models is correct).
     
-    Args:
-    - correct_llm_incorrect_mc: Indices where LLM is correct and MC is incorrect.
-    - correct_mc_incorrect_llm: Indices where MC is correct and LLM is incorrect.
-    - P_combined: Aggregated model's predictions.
-    - ground_truths: Ground truth labels (binary, array of shape [num_samples]).
+#     Args:
+#     - correct_llm_incorrect_mc: Indices where LLM is correct and MC is incorrect.
+#     - correct_mc_incorrect_llm: Indices where MC is correct and LLM is incorrect.
+#     - P_combined: Aggregated model's predictions.
+#     - ground_truths: Ground truth labels (binary, array of shape [num_samples]).
     
-    Returns:
-    - (prop where using LLM would improve agg, prop where using MC would improve agg)
-    """
+#     Returns:
+#     - (prop where using LLM would improve agg, prop where using MC would improve agg)
+#     """
 
-    improve_with_llm = 0
-    improve_with_mc = 0
+#     improve_with_llm = 0
+#     improve_with_mc = 0
 
-    # all 'one right one wrong' cases
-    total_cases = len(correct_llm_incorrect_mc) + len(correct_mc_incorrect_llm)
+#     # all 'one right one wrong' cases
+#     total_cases = len(correct_llm_incorrect_mc) + len(correct_mc_incorrect_llm)
 
-    # LLM correct, MC incorrect
-    for idx in correct_llm_incorrect_mc:
-        # check if aggregated model incorrect AND if it could have been improved by LLM
-        if (P_combined[idx] >= 0.5) != ground_truths[idx]: 
-            improve_with_llm += 1  
+#     # LLM correct, MC incorrect
+#     for idx in correct_llm_incorrect_mc:
+#         # check if aggregated model incorrect AND if it could have been improved by LLM
+#         if (P_combined[idx] >= 0.5) != ground_truths[idx]: 
+#             improve_with_llm += 1  
 
-    # MC correct, LLM incorrect
-    for idx in correct_mc_incorrect_llm:
-        # check if aggregated model incorrect AND if it could have been improved by 2-stage
-        if (P_combined[idx] >= 0.5) != ground_truths[idx]:  
-            improve_with_mc += 1 
+#     # MC correct, LLM incorrect
+#     for idx in correct_mc_incorrect_llm:
+#         # check if aggregated model incorrect AND if it could have been improved by 2-stage
+#         if (P_combined[idx] >= 0.5) != ground_truths[idx]:  
+#             improve_with_mc += 1 
 
-    percent_improve_with_llm = (improve_with_llm / total_cases) if total_cases > 0 else 0
-    percent_improve_with_mc = (improve_with_mc / total_cases) if total_cases > 0 else 0
+#     percent_improve_with_llm = (improve_with_llm / total_cases) if total_cases > 0 else 0
+#     percent_improve_with_mc = (improve_with_mc / total_cases) if total_cases > 0 else 0
 
-    return percent_improve_with_llm, percent_improve_with_mc
+#     return percent_improve_with_llm, percent_improve_with_mc
