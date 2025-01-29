@@ -966,3 +966,153 @@ def starting_prompt_v6():
 
             **Response**: Please reply with '##Yes##' if you’ll engage or '##No##' if you won’t engage this week.
             """
+
+
+## Starting Week (t = 0) Prompts WITH action (intervention service call)
+
+
+def starting_action_prompt_v1():
+    """Uses only background features to predict binary engagement in the starting week in the program when given a live service call."""
+
+    return """
+            You are a mother enrolled in the ARMMAN Maternal and Child Healthcare Mobile Health program. 
+            ARMMAN is a non-governmental organization in India dedicated to reducing maternal and neonatal mortality among underprivileged communities. 
+            Through this program, you receive weekly preventive health information via automated voice messages, or, occasionally, via live service calls from health workers.
+
+            This is your starting week in the simulation as you have just enrolled in the program. 
+
+            - **Your Background:**
+            - You enrolled in the program during the {enroll_gest_age} week of your pregnancy.
+            - You are {age_category} years old.
+            - Your family's monthly income is {income_bracket} Indian Rupees.
+            - Your education level is {education_level}.
+            - You speak {language}.
+            - You own a {phone_owner} phone.
+            - You prefer receiving calls in the {call_slot_preference} time slot.
+            - You enrolled in the program through the {channel_type} channel.
+            - You are currently in the {enroll_delivery_status} stage of pregnancy.
+            - It has been {days_to_first_call} days since you received your first call.
+            - You have been pregnant {g} times, with {p} successful births.
+            - You have experienced {s} stillbirth(s) and have {l} living child(ren).
+
+            **Key Consideration:** If you listen to the call or message for more than 30 seconds, it indicates that you are engaged with the program. Listening for less than 30 seconds suggests a lack of engagement.
+
+            **Key Consideration:** 
+            Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
+            Being unable to answer a call that week implies a lack of engagement for that week.
+
+            You will receive a live service call from a health worker this week, in your first week in the program.
+            **Question:** Will you be engaged with the first call and accompanying health message?
+
+            Please provide the answer in the format: '##Yes##' for engagement OR '##No##' for lack of engagement.
+            """
+
+
+def starting_action_prompt_v2():
+    """A simplified prompt for a live service call in the starting week with no past behavior."""
+
+    return """
+            In this simulation, this is your starting week, as you have just enrolled in a mobile health awareness program.
+            You will receive a live service call from a health worker this week, although in most other weeks you will receive automated health messages.
+
+            **Question:** Will you be engaged with the first health message via a live service call?
+
+            Please respond with your final decision in the format: '##Yes##' for engagement or '##No##' for lack of engagement.
+            """
+
+
+def starting_action_prompt_v3():
+    """Emphasizes the value of ARMMAN's program and asks for an initial engagement response to a live service call."""
+
+    return """
+            Welcome to the ARMMAN Maternal and Child Healthcare Mobile Health program. 
+            ARMMAN is a non-profit organization in India focused on supporting maternal and neonatal health in underprivileged communities. 
+            Through this program, you will receive weekly health guidance tailored to help you and your family.
+
+            As this is your starting week in the simulation, you are receiving the first health message.
+            You receive a live service call from a health worker this week, although in most other weeks you will receive automated health messages.
+
+            - **Your Profile:**
+              - Enrollment in the {enroll_gest_age} week of pregnancy.
+              - Age: {age_category} years.
+              - Monthly family income: {income_bracket} INR.
+              - Education: {education_level}.
+              - Primary language: {language}.
+              - Phone type: {phone_owner}.
+              - Preferred call time: {call_slot_preference}.
+              - Enrollment channel: {channel_type}.
+              - Pregnancy stage: {enroll_delivery_status}.
+              - Days since first call: {days_to_first_call}.
+              - Pregnancy history: {g} pregnancies, {p} live births, {s} stillbirth(s), {l} living child(ren).
+
+            **Key Note**: Engaging with this program can be beneficial for your and your baby’s health. 
+            However, whether you engage with each message may depend on your schedule, phone availability, and specific needs at any given time.
+
+            **Question:** Will you listen to and engage with this first health message?
+
+            Please provide your answer in the format '##Yes##' for engagement or '##No##' for lack of engagement.
+            """
+
+
+def starting_action_prompt_v4():
+    """A concise prompt that encourages the participant to consider the importance of their first engagement decision given a live service call."""
+
+    return """
+            You are beginning your journey in the ARMMAN Maternal and Child Healthcare Mobile Health program. 
+            Each week, you will receive an important health message designed to support you through pregnancy and early motherhood.
+            You receive a live service call from a health worker this week, although in most other weeks you will receive automated health messages.
+
+            - **Your Background Information:**
+              - Enrollment in week {enroll_gest_age} of pregnancy.
+              - Age: {age_category}.
+              - Monthly family income: {income_bracket} INR.
+              - Education level: {education_level}.
+              - Language: {language}.
+              - Type of phone: {phone_owner}.
+              - Preferred time for calls: {call_slot_preference}.
+              - Program enrollment through: {channel_type}.
+              - Pregnancy stage: {enroll_delivery_status}.
+              - Days since first call: {days_to_first_call}.
+              - History: {g} pregnancies, {p} live births, {s} stillbirth(s), and {l} child(ren) currently.
+
+            **Reminder**: Engaging each week depends on your unique situation that day—phone availability, schedule, and personal priorities may all play a role. 
+            Listening for more than 30 seconds shows engagement, while anything less (including not being able to answer the phone) implies no engagement.
+
+            **Question:** As you receive this first health message, will you choose to / be able to engage with it?
+
+            Respond only with '##Yes##' if you will engage or '##No##' if you will not engage.
+            """
+
+
+def starting_action_prompt_v5():
+    """Highlights the importance of the participant's decision and engagement with the program. Given a live service call in week 1."""
+
+    return """
+            Welcome to the ARMMAN Maternal and Child Healthcare Mobile Health program. 
+            As a participant, each weekly health message you receive supports your well-being during pregnancy and early motherhood.
+
+            Your engagement with the program, starting from this first week, can provide vital health information to support you and your family. 
+
+            - **Your Profile**:
+              - Enrollment in the {enroll_gest_age} week of pregnancy.
+              - Age: {age_category} years.
+              - Monthly family income: {income_bracket} INR.
+              - Education: {education_level}.
+              - Language spoken: {language}.
+              - Type of phone: {phone_owner}.
+              - Preferred time for calls: {call_slot_preference}.
+              - Enrollment through: {channel_type}.
+              - Pregnancy stage: {enroll_delivery_status}.
+              - Days since your first call: {days_to_first_call}.
+              - Pregnancy history: {g} pregnancies, {p} successful births, {s} stillbirth(s), and {l} living child(ren).
+
+            **Key Consideration**: Engagement may depend on factors like your schedule and phone availability, which may vary each week. 
+            If you don’t answer a call, this counts as non-engagement for that week.
+
+            **Key Consideration**: This week, you receive a live service call from a health worker. However, in most other weeks, you will receive automated health messages.
+            You do not know this is a live call until you answer it, if you do answer it.
+
+            **Question**: As you receive this first health message, will you engage with it?
+
+            **Response**: Please reply with '##Yes##' if you’ll engage or '##No##' if you won’t engage this week.
+            """
