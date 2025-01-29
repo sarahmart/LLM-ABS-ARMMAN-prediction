@@ -8,10 +8,13 @@ def process_data_weekly_with_actions(args, config,
     # Use all prompt versions in the ensemble
     prompt_templates = [bin_prompt_v1(), bin_prompt_v2(), bin_prompt_v3(), bin_prompt_v4(), bin_prompt_v5()] 
     starting_prompt_templates = [starting_prompt_v2(), starting_prompt_v3(), starting_prompt_v4(), starting_prompt_v5(), starting_prompt_v6()]
+    action_prompt_templates = [action_prompt_v1(), action_prompt_v2(), action_prompt_v3(), action_prompt_v4(), action_prompt_v5()]
+    include_actions_prompt_templates = [include_actions_prompt_v1(), include_actions_prompt_v2(), include_actions_prompt_v3(), include_actions_prompt_v4(), include_actions_prompt_v5()]
+    starting_action_prompt_templates = [starting_action_prompt_v1(), starting_action_prompt_v2(), starting_action_prompt_v3(), starting_action_prompt_v4(), starting_action_prompt_v5()]
 
-    all_binary_predictions = [[] for _ in range(args.t2)]  # To store binary predictions for t2 steps
+    all_binary_predictions = [[] for _ in range(args.t2)] 
     all_ground_truths = [[] for _ in range(args.t2)]
-    all_individual_predictions = []  # Store all individual predictions
+    all_individual_predictions = [] 
     extraction_failures = 0
     structured_results = {}
     ground_truths = []
