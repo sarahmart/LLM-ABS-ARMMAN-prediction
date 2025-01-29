@@ -19,26 +19,84 @@ def compute_metrics(P_combined, ground_truths, threshold=0.5):
     """
     # Ensure ground truths are binary integers
     ground_truths = np.array(ground_truths).astype(int)
+
+    if len(ground_truths) == 0:
+        print("NO GROUND TRUTHS??")
+        return 0, 0, 0
     
     # Binarize predictions based on threshold
     P_combined = np.array(P_combined)
     predictions = (P_combined >= threshold).astype(int)
     
-    # Compute accuracy
+    # Compute accuracy & F1 with sklearn
     accuracy = accuracy_score(ground_truths, predictions)
-    
-    # Compute F1 score
-    f1 = f1_score(ground_truths, predictions)
+    f1 = f1_score(ground_truths, predictions, zero_division=0)
     
     # Compute log likelihood (binary cross-entropy)
     epsilon = 1e-10  # To avoid log(0) errors
     P_combined_clipped = np.clip(P_combined, epsilon, 1 - epsilon)
-    log_likelihood = np.sum(
-        ground_truths * np.log(P_combined_clipped) + (1 - ground_truths) * np.log(1 - P_combined_clipped)
-    ) / len(ground_truths) # normalise by pop size
+    log_likelihood = np.sum(ground_truths * np.log(P_combined_clipped) + (1-ground_truths) * np.log(1-P_combined_clipped)) / len(ground_truths) # normalise by pop size
     
     return accuracy, f1, log_likelihood
 
+
+def compute_metrics_by_group(data, predictions, ground_truths, feature_categories, models, P_combined, P_direct_avg, P_lowest_unc):
+    """
+    Compute metrics (accuracy, F1 score, log likelihood) by feature group, 
+    including aggregated and averaged models.
+    """
+    metrics_by_group = {model: {} for model in models + ["Aggregated", "Averaged", "Lowest Uncertainty"]}
+
+    # Loop over timesteps
+    for t in range(ground_truths.shape[0]):  
+        for category in feature_categories:
+            # Filter data by feature category (boolean index for mothers)
+            group_indices = data[category] == 1  # bool array of shape [mothers]
+            group_ground_truths = ground_truths[t, group_indices]  
+
+            # Skip empty groups
+            if len(group_ground_truths) == 0:
+                continue
+
+            # Compute metrics for each model
+            for model in models:
+                # Get predictions for this timestep and group
+                group_predictions = np.array(predictions[model])[t, group_indices]
+
+                # Compute metrics
+                acc, f1, log_likelihood = compute_metrics(group_predictions, group_ground_truths)
+
+                # Store metrics
+                if category not in metrics_by_group[model]:
+                    metrics_by_group[model][category] = {"Accuracy": [], "F1 Score": [], "Log Likelihood": []}
+                metrics_by_group[model][category]["Accuracy"].append(acc)
+                metrics_by_group[model][category]["F1 Score"].append(f1)
+                metrics_by_group[model][category]["Log Likelihood"].append(log_likelihood)
+
+            # Include aggregated models
+            for aggregate_type, aggregate_preds in zip(["Aggregated", "Averaged", "Lowest Uncertainty"], [P_combined, P_direct_avg, P_lowest_unc]):
+                aggregate_preds = np.array(aggregate_preds)  # Convert to NumPy array
+                group_aggregate_predictions = aggregate_preds[t, group_indices]
+                acc, f1, log_likelihood = compute_metrics(group_aggregate_predictions, group_ground_truths)
+
+                # Store metrics
+                if category not in metrics_by_group[aggregate_type]:
+                    metrics_by_group[aggregate_type][category] = {"Accuracy": [], "F1 Score": [], "Log Likelihood": []}
+                metrics_by_group[aggregate_type][category]["Accuracy"].append(acc)
+                metrics_by_group[aggregate_type][category]["F1 Score"].append(f1)
+                metrics_by_group[aggregate_type][category]["Log Likelihood"].append(log_likelihood)
+
+    return metrics_by_group
+
+def overall_metrics_baselines(metric_dict):
+    """
+    Compute overall metrics for the baselines (average, lowest uncertainty).
+    """
+    overall_acc = np.mean(metric_dict["Accuracy"])
+    overall_f1 = np.mean(metric_dict["F1 Score"])
+    overall_log_lik = np.mean(metric_dict["Log Likelihood"])
+
+    return [overall_acc, overall_f1, overall_log_lik]
 
 def binary_entropy(p):
     """Compute binary entropy for Bernoulli distribution."""

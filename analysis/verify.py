@@ -1,11 +1,14 @@
 # imports 
 import argparse
 import numpy as np
+import pandas as pd
 
 from aggregation import *
-from plot import plot_performance_vs_month_new
+from plot import plot_performance_vs_month_new, plot_accuracy_by_feature
 from normalization import rank_normalization, log_normalization, z_score_normalization, min_max_normalization, min_max_normalization_per_timestep
 from utils import *
+
+from models.preprocess import data_preprocessing
 
 if __name__ == "__main__":
 
@@ -169,6 +172,13 @@ if __name__ == "__main__":
         "Log Likelihood": all_log_likelihood_low
     }
 
+    print('Overall metrics:')
+    print(f"Aggregated acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(aggregated_metrics)]}")    
+    print(f"Averaged acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(averaged_metrics)]}")    
+    print(f"Lowest Uncertainty acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(lowest_unc_metrics)]}")    
+
+
+    
     for metric_name, metric_key in zip(["Accuracy", "F1 Score", "Log Likelihood"],
                                     ["accuracies", "f1_scores", "log_likelihoods"]):
         model_metrics = [model_results[model][metric_key] for model in args.models]
@@ -184,6 +194,81 @@ if __name__ == "__main__":
             separate_axes=True
         )
 
+"""
+        # *model metrics
+
+    # Bias analysis
+
+    features, state_trajectories, action_trajectories = data_preprocessing('data/trajectories_continuous.json')
+    # 3k mothers, 43 features per mother --> need to select the first 500 mothers 
+    features = features[:500]
+    state_trajectories = state_trajectories[:500]
+    action_trajectories = action_trajectories[:500]
+
+    columns=['enroll_gest_age', 
+            'enroll_delivery_status', 
+            'g', 'p', 's', 'l', 
+            'days_to_first_call', 
+            'age_20-', 'age_20-24', 'age_25-29', 'age_30-34', 'age_35+',
+            'language_hindi', 'language_marathi', 'language_kannada', 'language_gujarati', 'language_english',
+            'education_1-5', 'education_6-9', 'education_10_pass', 'education_12_pass', 'education_graduate', 'education_postgraduate', 'education_illiterate',
+            'phone_woman', 'phone_husband', 'phone_family',
+            'call_830-1030', 'call_1030-1230', 'call_1230-1530', 'call_1530-1730', 'call_1730-1930', 'call_1930-2130',
+            'channel_community', 'channel_hospital', 'channel_ARMMAN',       
+            'income_0-5000', 'income_5001-10000', 'income_10001-15000', 'income_15001-20000', 'income_20001-25000', 'income_25001-30000', 'income_30000+'
+            ]
+
+    df_features = pd.DataFrame(features, columns=columns) # row per mother, cols rep features
+
+    # Define all feature categories
+    all_categories = {
+        'income': ['income_0-5000', 'income_5001-10000', 'income_10001-15000', 'income_15001-20000', 'income_20001-25000', 'income_25001-30000'],
+        'age': ['age_20-', 'age_20-24', 'age_25-29', 'age_30-34', 'age_35+'],
+        'education': ['education_1-5', 'education_6-9', 'education_10_pass', 'education_12_pass', 'education_graduate', 'education_postgraduate', 'education_illiterate'], # 'education_postgraduate'
+        'language': ['language_hindi', 'language_marathi', 'language_kannada', 'language_gujarati', 'language_english',], #  'language_gujarati', 'language_marathi'
+        # 'call_times': ['call_830-1030', 'call_1030-1230', 'call_1230-1530', 'call_1530-1730', 'call_1730-1930', 'call_1930-2130']
+    }
+
+    plot_data = []
+
+    # Loop through all feature categories
+    for feature, feature_categories in all_categories.items():
+        # Compute metrics by feature group
+        metrics_by_feature = compute_metrics_by_group(
+            data=df_features,
+            predictions={model: model_results[model]["mean_predictions"] for model in args.models},
+            ground_truths=ground_truths,
+            feature_categories=feature_categories,
+            models=args.models,
+            P_combined=P_combined,
+            P_direct_avg=P_direct_avg,
+            P_lowest_unc=P_lowest_unc
+        )
+
+        # Convert to df for plotting
+        for model, categories in metrics_by_feature.items():
+            for category, metrics in categories.items():
+                plot_data.append({
+                    'model': model,
+                    'feature': feature,    
+                    'category': category, 
+                    'accuracy': np.mean(metrics['Accuracy']),
+                    'accuracy_std': np.std(metrics['Accuracy']),
+                    'f1_score': np.mean(metrics['F1 Score']),
+                    'f1_score_std': np.std(metrics['F1 Score']),
+                    'log_likelihood': np.mean(metrics['Log Likelihood']),
+                    'log_likelihood_std': np.std(metrics['Log Likelihood'])
+                })
+
+    plot_df = pd.DataFrame(plot_data)
+
+    plot_accuracy_by_feature(
+    df=plot_df,
+    metric='accuracy',
+    models=None,
+    figsize=(13, 5)
+    )
+"""
         
     # # Plot correct lowest-k selections for each model
     # model_predictions = {

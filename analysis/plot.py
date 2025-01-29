@@ -6,47 +6,6 @@ import numpy as np
 import seaborn as sns
 
 
-def plot_performance_vs_month(months, metric_llm, uncertainty_llm, metric_nn, uncertainty_nn, metric_agg, metric_avg, metric_name):
-    """
-    Plot performance metric vs. month and save the figure.
-
-    Args:
-    - months: List of months.
-    - metric_llm: Metric values for LLM predictions.
-    - metric_nn: Metric values for NN predictions.
-    - metric_agg: Metric values for aggregated predictions.
-    - metric_avg: Metric values for direct averaging predictions.
-    - metric_name: Name of the metric (e.g., 'Accuracy', 'F1 Score', 'Log Likelihood').
-    """
-    plt.figure(figsize=(10, 6))
-    
-    # Plot LLM performance
-    plt.plot(months, metric_llm, label='OpenAI Model', marker='o', linestyle='--')
-    
-    # Plot NN performance
-    if any(metric_nn):
-        plt.plot(months, metric_nn, label='Anthropic Model', marker='o', linestyle='--')
-    
-    # Plot Direct Averaging performance
-    if any(metric_avg):
-        plt.plot(months, metric_avg, label='Posterior', marker='o')
-
-    # Plot Aggregated performance
-    if any(metric_agg):
-        plt.plot(months, metric_agg, label='Uncertainty-weighted Posterior', marker='o', linewidth=2.5)
-
-    plt.xlabel("Month")
-    plt.ylabel(metric_name)
-    plt.title(f"{metric_name} vs. Month")
-    plt.legend()
-    plt.grid(True)
-    
-    # Save the figure
-    plt.savefig(f"{metric_name.replace(' ', '_').lower()}_vs_month.png")
-    
-    plt.show()
-
-
 def plot_performance_vs_month_new(months, *metrics, 
                                   metric_agg, metric_avg, metric_low,
                                   metric_name, model_labels=None, separate_axes=False):
@@ -72,8 +31,8 @@ def plot_performance_vs_month_new(months, *metrics,
         # Plot all models on the same axes
 
         plt.figure(figsize=(10, 6))
-        cmap = matplotlib.colormaps['Paired']  # Use a categorical colormap
-        colors = [cmap(i / (len(metrics))) for i in range(len(metrics))]
+        cmap = matplotlib.colormaps['Paired']  
+        colors = [cmap(i) for i in range(len(metrics))]
 
         # Plot metrics for each model
         for metric, label, color in zip(metrics, model_labels, colors):
@@ -136,12 +95,12 @@ def plot_performance_vs_month_new(months, *metrics,
             # Plot lowest uncertainty model performance
             if any(metric_low):
                 ax.plot(months, metric_low, label='Lowest Uncertainty', 
-                        marker='o', markersize=3, color='grey') #'#DC143C')
+                        marker='o', markersize=3, color='grey') 
 
             # Plot aggregated performance
             if any(metric_agg):
                 ax.plot(months, metric_agg, label='Uncertainty-weighted Aggregation', 
-                        marker='o', markersize=3, color='#DC143C') #'orange')
+                        marker='o', markersize=3, color='#DC143C') 
 
             # Subplot config
             ax.set_ylabel(metric_name, fontsize=12)
@@ -158,6 +117,72 @@ def plot_performance_vs_month_new(months, *metrics,
         plt.tight_layout()
         plt.savefig(f"{metric_name.replace(' ', '_').lower()}_vs_week_subplots.png")
         plt.show()
+
+
+def plot_accuracy_by_feature(features=None, df=None, metric='accuracy', models=None, figsize=(16, 13)):
+    
+    if features is None: # default to all features in df
+        features = df['feature'].unique()  
+
+    if models is None: # default to all models in df
+        models = df['model'].unique() 
+
+    # set up axes
+    num_features = len(features)
+    num_rows = math.ceil(num_features/2) 
+    fig, axes = plt.subplots(num_rows, 2, figsize=(figsize[0], figsize[1] * num_rows), sharey=True)
+    axes = axes.flatten() 
+
+    bar_width = 0.12
+
+    for ax, feature in zip(axes, features):
+
+        feature_df = df[df['feature'] == feature] 
+        feature_categories = feature_df['category'].unique()
+        x = np.arange(len(feature_categories))  # mid x pos for categories
+
+        cmap = matplotlib.colormaps['Paired']  
+        colors = [cmap(i) for i in range(12)] 
+        model_colors = [colors[i] for i in [0,1,2,3,6]] + ['#DC143C', 'k', 'gray']
+        
+        for i, model in enumerate(models):
+            model_df = feature_df[feature_df['model'] == model]
+            if metric == 'log_likelihood':
+                to_plot = model_df.groupby('category')[metric].mean()
+            else: 
+                to_plot = model_df.groupby('category')[metric].mean()
+            std_dev = model_df.groupby('category')[metric + '_std'].mean()
+            
+            # diff x positions for each model
+            x_positions = x + i * bar_width
+
+            # plot bars w error bars
+            bars = ax.bar(x_positions, to_plot.values, 
+                          yerr=std_dev.values, capsize=5, error_kw={'elinewidth': 0.1, 'alpha': 0.4, 'color': 'gray'},
+                          width=bar_width, label=model, alpha=1, 
+                          color=model_colors[i], edgecolor='black')
+
+            # Print mean accuracy 
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width() / 2, height+0.1, f'{height:.2f}', 
+                        ha='center', va='bottom', fontsize=9, color='black', rotation=90)
+
+        ax.set_title(f'{metric.capitalize()} by {feature.capitalize()}', fontsize=14)
+        ax.set_xlabel(feature.capitalize(), fontsize=12)
+        ax.set_xticks(x + bar_width * (len(models) - 1) / 2) 
+        ax.set_xticklabels(feature_categories, rotation=70, fontsize=10)
+        ax.grid(axis='y', linestyle='--', alpha=0.7)
+
+    # Remove extra empty axes
+    for ax in axes[num_features:]:
+        ax.set_visible(False)
+
+    axes[0].set_ylabel(metric.capitalize(), fontsize=12) 
+    fig.legend(models, loc='upper center', bbox_to_anchor=(0.5, 0.5), ncol=len(models), fontsize=12)
+    fig.tight_layout()
+    # plt.savefig(f'plots/bias_by_feature_{metric}.png')
+    plt.show()
 
 
 # def logistic_growth(t, a, b, k, m):
@@ -301,4 +326,45 @@ def plot_performance_vs_month_new(months, *metrics,
 #     # Save and show plot
 #     plt.tight_layout()
 #     plt.savefig(f"overall_lowest_k_engagement_accuracy_k_{k}.png")
+#     plt.show()
+
+
+# def plot_performance_vs_month(months, metric_llm, uncertainty_llm, metric_nn, uncertainty_nn, metric_agg, metric_avg, metric_name):
+#     """
+#     Plot performance metric vs. month and save the figure.
+
+#     Args:
+#     - months: List of months.
+#     - metric_llm: Metric values for LLM predictions.
+#     - metric_nn: Metric values for NN predictions.
+#     - metric_agg: Metric values for aggregated predictions.
+#     - metric_avg: Metric values for direct averaging predictions.
+#     - metric_name: Name of the metric (e.g., 'Accuracy', 'F1 Score', 'Log Likelihood').
+#     """
+#     plt.figure(figsize=(10, 6))
+    
+#     # Plot LLM performance
+#     plt.plot(months, metric_llm, label='OpenAI Model', marker='o', linestyle='--')
+    
+#     # Plot NN performance
+#     if any(metric_nn):
+#         plt.plot(months, metric_nn, label='Anthropic Model', marker='o', linestyle='--')
+    
+#     # Plot Direct Averaging performance
+#     if any(metric_avg):
+#         plt.plot(months, metric_avg, label='Posterior', marker='o')
+
+#     # Plot Aggregated performance
+#     if any(metric_agg):
+#         plt.plot(months, metric_agg, label='Uncertainty-weighted Posterior', marker='o', linewidth=2.5)
+
+#     plt.xlabel("Month")
+#     plt.ylabel(metric_name)
+#     plt.title(f"{metric_name} vs. Month")
+#     plt.legend()
+#     plt.grid(True)
+    
+#     # Save the figure
+#     plt.savefig(f"{metric_name.replace(' ', '_').lower()}_vs_month.png")
+    
 #     plt.show()
