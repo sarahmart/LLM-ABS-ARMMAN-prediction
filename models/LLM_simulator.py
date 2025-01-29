@@ -272,13 +272,13 @@ def process_data(args, engine, features, state_trajectories, action_trajectories
                 predictions.append(engagement_prediction)
             
             #print(predictions)
-            # Use majority voting or averaging for the final engagement prediction
+            # Average for final engagement prediction
             final_engagement_prediction = np.mean(predictions)
             #print(final_engagement_prediction)
-            # Append the LLM's prediction to the state for future prediction
-            arm_state.append(50 if final_engagement_prediction > 0.5 else 0)  # Use the predicted state (engagement) as input for the next time step, 50 will considered as engaged
+            # Append LLM's prediction to the state for future prediction
+            arm_state.append(50 if final_engagement_prediction > 0.5 else 0)  # Use the predicted state (engagement) as input for the next time step, 0.5 will considered as engaged
             #print(arm_state)
-            arm_action.append(action_trajectories[arm][t + args.t1])  # Keep the action sequence unchanged
+            arm_action.append(action_trajectories[arm][t + args.t1])  # Keep action sequence unchanged
 
             all_binary_predictions[t].append(final_engagement_prediction)
             ground_truth = state_trajectories[arm][t + args.t1]  # The ground truth engagement for the next step
@@ -460,7 +460,6 @@ def process_data_weekly_with_prompt_ensemble(args, config, features, state_traje
     output_dir = f"./results/weekly/{model}_{args.num_arms}"
     os.makedirs(output_dir, exist_ok=True)
 
-
     # Check if already run --> resume from last completed week
     saved_weeks = glob.glob(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}_week_*.json")
     if saved_weeks:
@@ -491,7 +490,10 @@ def process_data_weekly_with_prompt_ensemble(args, config, features, state_traje
             structured_results[w] = {}
 
             # Parallelised loop for arms
-            with ThreadPoolExecutor() as executor:
+            saved_arm_files = glob.glob(f"{output_dir}/arm_results_week_{w}_arm_*.json")
+            completed_arms = set(int(f.split("_arm_")[1].split(".")[0]) for f in saved_arm_files)
+
+            with ThreadPoolExecutor(max_workers=10) as executor:
                 arms_progress = tqdm(total=args.num_arms, desc=f"Week {w} arms", leave=False, file=sys.stdout)
                 futures = [
                     executor.submit(
@@ -508,7 +510,7 @@ def process_data_weekly_with_prompt_ensemble(args, config, features, state_traje
                         starting_prompt_templates,
                         extraction_failures
                     )
-                    for arm in range(args.num_arms)
+                    for arm in range(args.num_arms) if arm not in completed_arms
                 ]
                 for future in futures:
                     arm, ground_truth, final_engagement_prediction, individual_predictions = future.result()
@@ -516,6 +518,17 @@ def process_data_weekly_with_prompt_ensemble(args, config, features, state_traje
                     print(f"Processed arm {arm} for week {w}")
                     arms_progress.update(1)
                     
+                    # Save intermediate arm results --> need to add a bash script for autodeletion of these after saving weekly!!
+                    arm_result_path = f"{output_dir}/arm_results_week_{w}_arm_{arm}.json"
+                    with open(arm_result_path, "w") as f:
+                        json.dump({
+                            "arm": arm,
+                            "week": w,
+                            "ground_truth": ground_truth,
+                            "final_engagement_prediction": final_engagement_prediction,
+                            "individual_predictions": individual_predictions
+                        }, f, indent=4)
+
                     # Store results
                     structured_results[w][arm] = {"responses": individual_predictions}
                     all_binary_predictions[w].append(final_engagement_prediction)
