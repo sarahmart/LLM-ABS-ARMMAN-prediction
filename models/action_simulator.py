@@ -1,6 +1,44 @@
 from LLM_simulator import *
 
 
+def process_arm(arm, w, args, features, state_trajectories, action_trajectories, sys_prompt, config, prompt_templates, starting_prompt_templates, extraction_failures):
+    """Process a single arm --> for parallelisation."""
+    
+    week_steps = np.arange(40)
+    arm_features = features[arm]
+    individual_predictions = []  # Store individual predictions for this arm and week
+    predictions = []
+
+    if w == 0:
+        mapped_features = map_features_to_prompt(arm_features, [], [], first_week=True)
+        prompt_text = [generate_prompt(mapped_features, prompt_template) for prompt_template in starting_prompt_templates]
+    else:
+        history_end_week = week_steps[w - 1]
+        arm_states = state_trajectories[arm][:history_end_week]
+        arm_actions = action_trajectories[arm][:history_end_week]
+        mapped_features = map_features_to_prompt(arm_features, arm_states, arm_actions)
+        prompt_text = [generate_prompt(mapped_features, prompt_template) for prompt_template in prompt_templates]
+
+    # Compute ground truth for this arm
+    ground_truth = 1 if np.array(state_trajectories[arm][w]) > 30 else 0
+
+    # Collect predictions
+    for prompt in prompt_text:
+        responses = []
+        for _ in range(args.num_queries):
+            engagement_prediction, response = LLM_eval(config, args.config_path.split('_')[0], sys_prompt, prompt)
+            if engagement_prediction == "error":
+                extraction_failures += 1
+                engagement_prediction = 0
+            responses.append(engagement_prediction)
+        predictions.append(np.mean(responses))  # Average responses for this prompt template
+        individual_predictions.append(responses)  # Save individual predictions for each prompt
+
+    final_engagement_prediction = np.mean(predictions)
+
+    return arm, ground_truth, final_engagement_prediction, individual_predictions
+
+
 def process_data_weekly_with_actions(args, config, 
                                      features, state_trajectories, action_trajectories, 
                                      sys_prompt):
