@@ -176,6 +176,16 @@ if __name__ == "__main__":
     print(f"Aggregated acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(aggregated_metrics)]}")    
     print(f"Averaged acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(averaged_metrics)]}")    
     print(f"Lowest Uncertainty acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(lowest_unc_metrics)]}")    
+    
+    print('First 10 weeks:')
+    print(f"Aggregated acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(aggregated_metrics, 10)]}")    
+    print(f"Averaged acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(averaged_metrics, 10)]}")    
+    print(f"Lowest Uncertainty acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(lowest_unc_metrics, 10)]}")    
+
+    print('First 20 weeks:')
+    print(f"Aggregated acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(aggregated_metrics, 20)]}")    
+    print(f"Averaged acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(averaged_metrics, 20)]}")    
+    print(f"Lowest Uncertainty acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(lowest_unc_metrics, 20)]}")    
 
 
     
