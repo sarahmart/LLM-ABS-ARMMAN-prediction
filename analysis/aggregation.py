@@ -88,13 +88,17 @@ def compute_metrics_by_group(data, predictions, ground_truths, feature_categorie
 
     return metrics_by_group
 
-def overall_metrics_baselines(metric_dict):
+def overall_metrics_baselines(metric_dict, n_weeks=None):
     """
     Compute overall metrics for the baselines (average, lowest uncertainty).
     """
-    overall_acc = np.mean(metric_dict["Accuracy"])
-    overall_f1 = np.mean(metric_dict["F1 Score"])
-    overall_log_lik = np.mean(metric_dict["Log Likelihood"])
+
+    if n_weeks is None:
+        n_weeks = len(metric_dict["Accuracy"])
+    
+    overall_acc = np.mean(metric_dict["Accuracy"][:n_weeks])
+    overall_f1 = np.mean(metric_dict["F1 Score"][:n_weeks])
+    overall_log_lik = np.mean(metric_dict["Log Likelihood"][:n_weeks])
 
     return [overall_acc, overall_f1, overall_log_lik]
 
