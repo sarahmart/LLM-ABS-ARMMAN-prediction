@@ -15,7 +15,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_arms", type=int, default=500, help="Number of mothers to simulate.")
     parser.add_argument("--models", nargs='+', default=["google", "googlepro", "openai", "openaiheavy", "anthropic"], help="List of LLM models used in evals.")
-    parser.add_argument("--labels", nargs='+', default=["Gemini Flash", "Gemini Pro", "GPT-4o", "GPT-4o mini", "Claude Instant"], help="List of LLM labels for plotting.")
+    parser.add_argument("--labels", nargs='+', default=["Gemini Flash", "Gemini Pro", "GPT-4o mini", "GPT-4o", "Claude Instant"], help="List of LLM labels for plotting.")
     parser.add_argument("--t1", type=int, default=0, help="Start month for LLM predictions.")
     parser.add_argument("--t2", type=int, default=40, help="End month for LLM predictions.")
     parser.add_argument("--normalization", type=str, default="rank_normalization", help="Normalization method for uncertainties.")
