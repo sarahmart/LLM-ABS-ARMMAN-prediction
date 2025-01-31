@@ -389,10 +389,8 @@ def action_prompt_v1():
       The following is a record of your previous listening behavior (each representing one week):
       {past_behavior}
 
-    This week you receive a live call from a health worker aimed at improving your engagement with the program. 
-    
-    Based on this information, as well as the context of the program and on typical behavior of mothers in India,
-    decide whether you will be engaged with this live call and its health message.
+    This week you receive a live call from a health worker aimed providing you with important information on good health practices for you and your baby.
+    Based on this information, and on typical behavior of mothers in India, decide whether you will be engaged with this live call and its health message.
 
     **Key Consideration:** Engagement at one week does not imply engagement at the next, and the same for lack of engagement. 
     Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
@@ -412,8 +410,7 @@ def action_prompt_v2():
     You are a mother enrolled in the ARMMAN Maternal and Child Healthcare Mobile Health program. 
     This program provides weekly preventive health messages to help reduce maternal and neonatal mortality.
     Below is your background and history with the program. 
-    Based on this information, as well as the context of this program and others like it, and on typical behavior of mothers in India,
-    decide whether you will be engaged with the next health message you receive.
+    Based on this information, and on typical behavior of mothers in India, decide whether you will be engaged with the next health message you receive.
 
     Each time step in this simulation represents one week.
     - **Your Background:**
@@ -441,7 +438,7 @@ def action_prompt_v2():
     Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
     Being unable to answer a call that week implies a lack of engagement for that week.
         
-    **Question:** Will you be engaged with this week's health message?
+    **Question:** Will you be engaged with this week's health call from a health worker? Engaging with these messages helps you stay informed on best healthy practices. 
 
     Please provide the answer in the format: '##Yes##' for engagement OR '##No##' for lack of engagement.
     """
@@ -451,13 +448,14 @@ def action_prompt_v3():
     """A minimal prompt focusing only on past behavior (not sociodemographic information) for a binary engagement decision based on a live service call."""
 
     return """
-    The following is a record of your previous listening behavior to automated health messages you have received weekly by phone.
+    The following is a record of your previous listening behavior to health messages you have been receiving weekly by phone.
 
     - **Past Behavior:**
       The following is a record of your previous listening behavior:
       {past_behavior}
 
-    Based on this record, and on typical behavior of mothers in India, decide whether you will be engaged with the next health message you receive by phone.
+    Based on this record, and on typical behavior of mothers in India, decide whether you will be engaged with the next call from a health worker.
+    Engaging with these calls helps you stay informed on health practices. 
 
     **Key Consideration:** Engagement at one week does not imply engagement at the next (and the same for lack of engagement). 
     Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
@@ -474,7 +472,7 @@ def action_prompt_v4():
 
     return """
     You are participating in the ARMMAN Maternal and Child Healthcare Mobile Health program, receiving weekly health messages to support your well-being and that of your child. 
-    The program is vital to underprivileged communities in India, where consistent engagement with preventive health information can improve outcomes. 
+    The program is vital to underprivileged communities in India, where consistent engagement with health information improves health outcomes. 
 
     Each week in this simulation represents one opportunity to engage with health messages. Below is your background and recent weekly behavior.
 
