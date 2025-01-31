@@ -1,5 +1,7 @@
 import argparse
+import pandas as pd
 
+from atomicwrites import atomic_write
 from sklearn.cluster import KMeans
 from scipy.spatial.distance import cdist
 
@@ -17,7 +19,7 @@ def process_arm_with_action(arm, w, args, features, state_trajectories, action_t
     predictions = []
 
     # Determine if an action occurs at this timestep
-    action_taken = action_trajectories[arm][w] == 1 if w < len(action_trajectories[arm]) else False
+    action_taken = w < len(action_trajectories[arm]) and action_trajectories[arm][w] == 1
 
     # Select appropriate prompt template
     if w == 0 and action_taken: # action in first week
@@ -51,7 +53,7 @@ def process_arm_with_action(arm, w, args, features, state_trajectories, action_t
                 extraction_failures += 1
                 engagement_prediction = 0
             responses.append(engagement_prediction)
-        predictions.append(np.mean(responses))  # Average responses for this prompt template
+        predictions.append(np.mean(responses))    # Average responses for this prompt template
         individual_predictions.append(responses)  # Save individual predictions for each prompt
 
     final_engagement_prediction = np.mean(predictions)
@@ -59,21 +61,16 @@ def process_arm_with_action(arm, w, args, features, state_trajectories, action_t
     return arm, ground_truth, final_engagement_prediction, individual_predictions
 
 
-def process_data_weekly_with_actions(args, config, 
-                                     features, state_trajectories, action_trajectories, 
-                                     sys_prompt):
-    
-    # Use all prompt versions in the ensemble
-    prompt_templates = [bin_prompt_v1(), bin_prompt_v2(), bin_prompt_v3(), bin_prompt_v4(), bin_prompt_v5()] 
+def process_data_weekly_with_actions(args, config, features, state_trajectories, action_trajectories, sys_prompt):
+    prompt_templates = [bin_prompt_v1(), bin_prompt_v2(), bin_prompt_v3(), bin_prompt_v4(), bin_prompt_v5()]
     starting_prompt_templates = [starting_prompt_v2(), starting_prompt_v3(), starting_prompt_v4(), starting_prompt_v5(), starting_prompt_v6()]
     action_prompt_templates = [action_prompt_v1(), action_prompt_v2(), action_prompt_v3(), action_prompt_v4(), action_prompt_v5()]
     starting_action_prompt_templates = [starting_action_prompt_v1(), starting_action_prompt_v2(), starting_action_prompt_v3(), starting_action_prompt_v4(), starting_action_prompt_v5()]
 
     running_arms = len(state_trajectories)
-    
-    all_binary_predictions = [[] for _ in range(args.t2 - args.t1)] 
+    all_binary_predictions = [[] for _ in range(args.t2 - args.t1)]
     all_ground_truths = [[] for _ in range(args.t2 - args.t1)]
-    all_individual_predictions = [] 
+    all_individual_predictions = []
     extraction_failures = 0
     structured_results = {}
     ground_truths = []
@@ -82,103 +79,116 @@ def process_data_weekly_with_actions(args, config,
     output_dir = f"./results/actions/{model}_{args.num_arms}"
     os.makedirs(output_dir, exist_ok=True)
 
-    # Check if already run --> resume from last completed week
+    def load_last_valid_state(output_dir, w):
+        try:
+            with open(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}_week_{w-1}.json") as f:
+                return json.load(f)
+        except:
+            return {}
+
+    def save_arm_results_batch(results_buffer, output_dir, week):
+        for result in results_buffer:
+            arm = result['arm']
+            with atomic_write(f"{output_dir}/arm_results_week_{week}_arm_{arm}.json", overwrite=True) as f:
+                json.dump(result, f, indent=4)
+
+    def cleanup_intermediate_files(output_dir, current_week):
+        for f in glob.glob(f"{output_dir}/arm_results_week_{current_week-1}_arm_*.json"):
+            os.remove(f)
+
     saved_weeks = glob.glob(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}_week_*.json")
     if saved_weeks:
-        # Get week numbers from saved file names
         completed_weeks = sorted([int(f.split("_week_")[1].split(".")[0]) for f in saved_weeks])
         last_completed_week = completed_weeks[-1]
+        structured_results = load_last_valid_state(output_dir, last_completed_week + 1)
         print(f"Resuming from week {last_completed_week + 1}")
-    else: # no saved data
-        last_completed_week = -1
 
-    if last_completed_week != -1:
-        # Load previously saved results
         with open(f"{output_dir}/binary_predictions_t1_{args.t1}_t2_{args.t2}_week_{last_completed_week}.json", "r") as f:
             all_binary_predictions = json.load(f)
 
         with open(f"{output_dir}/ground_truths_t1_{args.t1}_t2_{args.t2}_week_{last_completed_week}.json", "r") as f:
             all_ground_truths = json.load(f)
 
-        with open(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}_week_{last_completed_week}.json", "r") as f:
-            structured_results = json.load(f)
+        failures_file = f"{output_dir}/extraction_failures_checkpoint.json"
+        if os.path.exists(failures_file):
+            with open(failures_file) as f:
+                extraction_failures = json.load(f)['extraction_failures']
+    else:
+        last_completed_week = -1
 
     for w in tqdm(range(last_completed_week + 1, args.t2), desc="Processing weeks", leave=False, file=sys.stdout):
-
-        if w < args.t1:  # Skip LLM predictions for months before t1
+        if w < args.t1:
             continue
 
         if args.t1 <= w <= args.t2:
             structured_results[w] = {}
-
-            # Parallelised loop for arms
             saved_arm_files = glob.glob(f"{output_dir}/arm_results_week_{w}_arm_*.json")
             completed_arms = set(int(f.split("_arm_")[1].split(".")[0]) for f in saved_arm_files)
+            arm_results_buffer = []
 
             with ThreadPoolExecutor(max_workers=10) as executor:
                 arms_progress = tqdm(total=running_arms, desc=f"Week {w} arms", leave=False, file=sys.stdout)
                 futures = [
                     executor.submit(
                         process_arm_with_action,
-                        arm,
-                        w,
-                        args,
-                        features,
-                        state_trajectories,
-                        action_trajectories,
-                        sys_prompt,
-                        config,
-                        prompt_templates,
-                        starting_prompt_templates,
-                        action_prompt_templates,  
-                        starting_action_prompt_templates,
-                        extraction_failures
+                        arm, w, args, features, state_trajectories, action_trajectories,
+                        sys_prompt, config, prompt_templates, starting_prompt_templates,
+                        action_prompt_templates, starting_action_prompt_templates, extraction_failures
                     )
                     for arm in range(running_arms) if arm not in completed_arms
                 ]
+
                 for future in futures:
                     arm, ground_truth, final_engagement_prediction, individual_predictions = future.result()
-
                     print(f"Processed arm {arm} for week {w}")
                     arms_progress.update(1)
-                    
-                    # Save intermediate arm results --> need to add a bash script for autodeletion of these after saving weekly!!
-                    arm_result_path = f"{output_dir}/arm_results_week_{w}_arm_{arm}.json"
-                    with open(arm_result_path, "w") as f:
-                        json.dump({
-                            "arm": arm,
-                            "week": w,
-                            "ground_truth": ground_truth,
-                            "final_engagement_prediction": final_engagement_prediction,
-                            "individual_predictions": individual_predictions
-                        }, f, indent=4)
 
-                    # Store results
+                    result_dict = {
+                        "arm": arm,
+                        "week": w,
+                        "ground_truth": ground_truth,
+                        "final_engagement_prediction": final_engagement_prediction,
+                        "individual_predictions": individual_predictions
+                    }
+                    arm_results_buffer.append(result_dict)
+
+                    if len(arm_results_buffer) >= 10:
+                        save_arm_results_batch(arm_results_buffer, output_dir, w)
+                        arm_results_buffer.clear()
+
                     structured_results[w][arm] = {"responses": individual_predictions}
                     all_binary_predictions[w].append(final_engagement_prediction)
                     all_ground_truths[w].append(ground_truth)
                     all_individual_predictions.append(individual_predictions)
 
+                    with atomic_write(f"{output_dir}/extraction_failures_checkpoint.json", overwrite=True) as f:
+                        json.dump({"extraction_failures": extraction_failures}, f)
+
                 arms_progress.close()
 
-            # Save intermediate results after each week
-            with open(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}_week_{w}.json", "w") as f:
+            # Save any remaining results in buffer
+            if arm_results_buffer:
+                save_arm_results_batch(arm_results_buffer, output_dir, w)
+
+            with atomic_write(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}_week_{w}.json", overwrite=True) as f:
                 json.dump(structured_results, f, indent=4)
 
-            with open(f"{output_dir}/binary_predictions_t1_{args.t1}_t2_{args.t2}_week_{w}.json", "w") as f:
+            with atomic_write(f"{output_dir}/binary_predictions_t1_{args.t1}_t2_{args.t2}_week_{w}.json", overwrite=True) as f:
                 json.dump(all_binary_predictions, f, indent=4)
 
-            with open(f"{output_dir}/ground_truths_t1_{args.t1}_t2_{args.t2}_week_{w}.json", "w") as f:
+            with atomic_write(f"{output_dir}/ground_truths_t1_{args.t1}_t2_{args.t2}_week_{w}.json", overwrite=True) as f:
                 json.dump(all_ground_truths, f, indent=4)
 
+            cleanup_intermediate_files(output_dir, w)
+
     # Save final results
-    with open(f"{output_dir}/all_individual_predictions_t1_{args.t1}_t2_{args.t2}.json", "w") as json_file:
-        json.dump(all_individual_predictions, json_file, indent=4)
+    with atomic_write(f"{output_dir}/all_individual_predictions_t1_{args.t1}_t2_{args.t2}.json", overwrite=True) as f:
+        json.dump(all_individual_predictions, f, indent=4)
 
-    with open(f"{output_dir}/ground_truths_t1_{args.t1}_t2_{args.t2}.json", "w") as json_file:
-        json.dump(ground_truths, json_file, indent=4)
+    with atomic_write(f"{output_dir}/ground_truths_t1_{args.t1}_t2_{args.t2}.json", overwrite=True) as f:
+        json.dump(ground_truths, f, indent=4)
 
-    with open(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}.json", "w") as f:
+    with atomic_write(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}.json", overwrite=True) as f:
         json.dump(structured_results, f, indent=4)
 
     return (all_ground_truths, all_binary_predictions, extraction_failures)
@@ -205,10 +215,10 @@ if __name__ == "__main__":
     state_trajectories = state_trajectories[0:args.num_full_sample]
     state_trajectories = [[1 if time > 30 else 0 for time in arm] for arm in state_trajectories]
     action_trajectories = action_trajectories[0:args.num_full_sample]
-    act_on = [i for i, arm in enumerate(action_trajectories) if any(arm)]
 
-    # subset of states and actions for the mothers who were intervened on
-    acted_states = [state_trajectories[i] for i in act_on]
+    # select all mothers who were acted on
+    act_on = [i for i, arm in enumerate(action_trajectories) if any(arm)]
+    # subset of actions for the mothers who were intervened on
     acted_actions = [action_trajectories[i] for i in act_on]
 
     # percentage of mothers acted on in each time step (all actions in first 6 time steps)
@@ -235,7 +245,6 @@ if __name__ == "__main__":
 
     # Keep track of used indices
     used_indices = set()
-
     for t in range(6):
         available_indices = np.setdiff1d(np.arange(len(representative_actions)), list(used_indices))  # Exclude used indices
         rng = np.random.default_rng(42)   # NOW ALWAYS SAME RANDOM SET OF MOTHERS GET ACTED ON --> need this to aggregate models
@@ -253,9 +262,13 @@ if __name__ == "__main__":
     torun_states = [state_trajectories[i] for i in used_indices]
     torun_features = [action_trajectories[i] for i in used_indices]
     
-    print(len(torun_actions), len(torun_states), len(torun_features))
+    # save actions to csv 
+    stacked_actions = np.array(torun_actions)
+    df = pd.DataFrame(stacked_actions)
+    df.insert(0, "Mother Index", list(used_indices))  
+    df.to_csv(f"./results/actions/action_trajectories_{len(torun_actions)}_t1_{args.t1}_t2_{args.t2}.csv", index=False)
 
-    sys_prompt = system_prompt()
+    sys_prompt = system_prompt_action()
 
     # Process the data and compute errors for monthly engagement with new mothers joining each month
     (all_ground_truths, 
@@ -278,7 +291,6 @@ if __name__ == "__main__":
     model = args.config_path.split('_')[0]
     np.save(f"./results/actions/{model}_{args.num_arms}/engagement_gpt_ground_truths_t1_{args.t1}_t2_{args.t2}.npy", np.array(flat_ground_truths))
     np.save(f"./results/actions/{model}_{args.num_arms}/engagement_gpt_binary_predictions_t1_{args.t1}_t2_{args.t2}.npy", np.array(flat_binary_predictions))
-
 
     # Log final results in a text file, also save the metrics per step
     with open(f"./results/actions/{model}_{args.num_arms}/engagement_gpt_predictions_summary_t1_{args.t1}_t2_{args.t2}.txt", "w") as summary_file:
