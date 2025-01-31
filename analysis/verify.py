@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 
 from aggregation import *
-from plot import plot_performance_vs_month_new, plot_accuracy_by_feature
+from plot import *
 from normalization import rank_normalization, log_normalization, z_score_normalization, min_max_normalization, min_max_normalization_per_timestep
 from utils import *
 
-from models.preprocess import data_preprocessing
+# from models.preprocess import data_preprocessing
 
 if __name__ == "__main__":
 
@@ -187,22 +187,22 @@ if __name__ == "__main__":
     print(f"Averaged acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(averaged_metrics, 20)]}")    
     print(f"Lowest Uncertainty acc, f1, log_lik: {[f'{m:.2f}' for m in overall_metrics_baselines(lowest_unc_metrics, 20)]}")    
 
+    # for metric_name, metric_key in zip(["Accuracy", "F1 Score", "Log Likelihood"],
+    #                                 ["accuracies", "f1_scores", "log_likelihoods"]):
+    #     model_metrics = [model_results[model][metric_key] for model in args.models]
 
-    
-    for metric_name, metric_key in zip(["Accuracy", "F1 Score", "Log Likelihood"],
-                                    ["accuracies", "f1_scores", "log_likelihoods"]):
-        model_metrics = [model_results[model][metric_key] for model in args.models]
+    #     plot_performance_vs_month_new(
+    #         timesteps, 
+    #         *model_metrics,
+    #         metric_agg=[np.mean(agg_metric) for agg_metric in aggregated_metrics[metric_name]],
+    #         metric_avg=[np.mean(avg_metric) for avg_metric in averaged_metrics[metric_name]],
+    #         metric_low=[np.mean(low_metric) for low_metric in lowest_unc_metrics[metric_name]],
+    #         metric_name=metric_name,
+    #         model_labels=args.labels,
+    #         separate_axes=True
+    #     )
 
-        plot_performance_vs_month_new(
-            timesteps, 
-            *model_metrics,
-            metric_agg=[np.mean(agg_metric) for agg_metric in aggregated_metrics[metric_name]],
-            metric_avg=[np.mean(avg_metric) for avg_metric in averaged_metrics[metric_name]],
-            metric_low=[np.mean(low_metric) for low_metric in lowest_unc_metrics[metric_name]],
-            metric_name=metric_name,
-            model_labels=args.labels,
-            separate_axes=True
-        )
+    plot_engagement_over_time(args.models, model_results, ground_truths, labels=None)
 
 """
         # *model metrics

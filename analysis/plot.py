@@ -185,6 +185,39 @@ def plot_accuracy_by_feature(features=None, df=None, metric='accuracy', models=N
     plt.show()
 
 
+def plot_engagement_over_time(models, model_results, ground_truths, labels=None):
+
+    # mean engagement per week for ground truths --> transpose if shape is (num_weeks, num_mothers)
+    if ground_truths.shape[0] < ground_truths.shape[1]: 
+        ground_truths = ground_truths.T
+    gcs = np.array(ground_truths)  # (num_mothers, num_weeks)
+    engagement_over_time = np.mean(gcs, axis=0) 
+
+    # Plot engagement over time
+    plt.figure(figsize=(15, 6))
+
+    # Plot Ground Truth Engagement
+    plt.plot(range(1, len(engagement_over_time) + 1), engagement_over_time, 
+            marker="o", markersize=5, linestyle="-", color="black", label="Ground Truth Engagement")
+
+    # Plot predicted engagement for each model
+    for model in models:
+        # mean engagement per week
+        model_predictions = np.array(model_results[model]["mean_predictions"])  # (num_time_steps, num_mothers)
+        mean_engagement_predictions = np.mean(model_predictions, axis=1)  # avg  over all mothers
+
+        plt.plot(range(1, len(mean_engagement_predictions) + 1), mean_engagement_predictions, 
+                    marker="o", linestyle="--", markersize=4, label=f"{model} Predictions")
+
+
+    plt.title("Mean enagement over time")
+    plt.xlabel("Weeks")
+    plt.ylabel("Proportion Engaged")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
 # def logistic_growth(t, a, b, k, m):
 #     return a + (b - a) / (1 + k * np.exp(-m * t))
 
