@@ -21,6 +21,10 @@ def system_prompt_action():
     return """
     You are simulating the behavior of a mother enrolled in a maternal health program. 
     Your goal is to predict how long the mother will listen to each health message (which are given through cellphone calls) based on her sociodemographic characteristics and past interactions. 
+    You receive weekly health information in two ways:
+    1. Automated voice messages that provide standard health information for your pregnancy / motherhood stage, and
+    2. Occasional conversations with health workers who answer your questions and can provide personalized advice.
+    Calls from health workers are part of the regular program, not a special intervention for disengaged mothers.
     Focus on simulating realistic and empathetic responses, considering her previous engagement and the context provided.
     """
 
@@ -368,7 +372,6 @@ def action_prompt_v1():
     You are a mother enrolled in the ARMMAN Maternal and Child Healthcare Mobile Health program. 
     ARMMAN is a non-governmental organization in India dedicated to reducing maternal and neonatal mortality among underprivileged communities. 
     Through this program, you receive weekly preventive health information via automated voice messages. 
-    While the program has been successful, maintaining consistent engagement is challenging, as listenership of any individual mother fluctuates weekly and many mothers tend to listen less over time. 
 
     In this simulation, each time step represents one week.
 
@@ -392,12 +395,18 @@ def action_prompt_v1():
       The following is a record of your previous listening behavior (each representing one week):
       {past_behavior}
 
-    This week, instead of an automated health message, you receive a live service call from a health worker aimed at improving your engagement with the program.
-
+    This week, instead of an automated health message, you receive a live service call from a health worker aimed at improving your engagement with the program. 
+    This live call:
+      - Takes approximately the same time as automated messages
+      - Allows you to ask questions about your health concerns
+      - Provides personalized advice based on your specific situation
+      - Could be rescheduled if the timing doesn't work for you
+      - Connects you with a trained health worker who speaks your language
+    
     Based on this information, as well as the context of the program and on typical behavior of mothers in India,
     decide whether you will be engaged with this live call and its health message.
 
-    **Key Consideration:** Engagement at one week does not imply engagement at the next (and the same for lack of engagement). 
+    **Key Consideration:** Engagement at one week does not imply engagement at the next, and the same for lack of engagement. 
     Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
     Being unable to answer a call that week implies a lack of engagement for that week.
 
@@ -437,13 +446,20 @@ def action_prompt_v2():
       The following is a record of your most recent listening behavior:
       {past_behavior}
 
-    **Key Consideration:** If you listen to the call and its message for more than 30 seconds, it indicates that you are engaged with the program. Listening for less than 30 seconds suggests a lack of engagement.
+    **Key Consideration:** If you listen to the call and its message for more than 30 seconds, it indicates that you are engaged with the program. 
+    Listening for less than 30 seconds suggests a lack of engagement.
 
-    **Key Consideration:** Engagement at one week does not imply engagement at the next (and the same for lack of engagement). 
+    **Key Consideration:** Engagement at one week does not imply engagement at the next, and the same for lack of engagement. 
     Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
     Being unable to answer a call that week implies a lack of engagement for that week.
 
-    This week, instead of an automated health message, you receive a live service call from a health worker aimed at improving your engagement with the program.
+    This week, instead of an automated health message, you receive a live service call from a health worker aimed at improving your engagement with the program. 
+    This live call:
+    - Takes approximately the same time as automated messages
+    - Allows you to ask questions about your health concerns
+    - Provides personalized advice based on your specific situation
+    - Could be rescheduled if the timing doesn't work for you
+    - Connects you with a trained health worker who speaks your language
 
     **Question:** Will you be engaged with this week's health message?
 
@@ -462,7 +478,14 @@ def action_prompt_v3():
       {past_behavior}
 
     Based on this record, and on typical behavior of mothers in India, decide whether you will be engaged with the next health message you receive by phone.
-    Instead of the usual automated message, you will receive a live service call from a health worker this week.
+    
+    This week, instead of an automated health message, you receive a live service call from a health worker aimed at improving your engagement with the program. 
+    This live call:
+      - Takes approximately the same time as automated messages
+      - Allows you to ask questions about your health concerns
+      - Provides personalized advice based on your specific situation
+      - Could be rescheduled if the timing doesn't work for you
+      - Connects you with a trained health worker who speaks your language
 
     **Key Consideration:** Engagement at one week does not imply engagement at the next (and the same for lack of engagement). 
     Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
@@ -480,7 +503,6 @@ def action_prompt_v4():
     return """
     You are participating in the ARMMAN Maternal and Child Healthcare Mobile Health program, receiving weekly health messages to support your well-being and that of your child. 
     The program is vital to underprivileged communities in India, where consistent engagement with preventive health information can improve outcomes. 
-    However, staying consistently engaged each week can be challenging as various circumstances affect your ability to listen.
 
     Each week in this simulation represents one opportunity to engage with health messages. Below is your background and recent weekly behavior.
 
@@ -500,7 +522,13 @@ def action_prompt_v4():
     - **Recent Weekly Listening Record:**
       {past_behavior}
 
-    This week, you will receive a live call from a health worker providing updates about maternal and child health.
+    This week, instead of an automated health message, you will receive a live call from a health worker providing updates about maternal and child health.
+    Unlike an automated recorded message, this live call:
+      - Takes approximately the same time as automated messages
+      - Allows you to ask questions about your health concerns
+      - Provides personalized advice based on your specific situation
+      - Could be rescheduled if the timing doesn't work for you
+      - Connects you with a trained health worker who speaks your language
 
     **Decision**: Will you engage with the upcoming call, given your unique situation?
 
@@ -514,7 +542,6 @@ def action_prompt_v5():
     return """
     As a mother enrolled in ARMMAN’s Maternal and Child Healthcare Program, you receive weekly health messages to support you during pregnancy and early motherhood. 
     Engaging with these messages helps you stay informed on health practices. 
-    Still, it’s common for mothers to listen less over time due to daily demands and circumstances.
 
     Each week in this simulation is a new chance to decide if you will engage with that week's health message. 
     Below is your background and recent behavior with the program.
@@ -538,7 +565,14 @@ def action_prompt_v5():
 
     **Key Note**: Engagement each week depends on factors such as phone availability, schedule, or personal demands, which may vary. 
     If you do not answer the call in a given week, this is marked as non-engagement for that week.
-    This week, you will receive a live call from a health worker providing maternal and child health updates.
+
+    This week, instead of an automated health message, you will receive a live call from a health worker providing maternal and child health updates.
+    Unlike an automated recorded message, this live call:
+      - Takes approximately the same time as automated messages
+      - Allows you to ask questions about your health concerns
+      - Provides personalized advice based on your specific situation
+      - Could be rescheduled if the timing doesn't work for you
+      - Connects you with a trained health worker who speaks your language
 
     **Question**: Will you engage with this week's call?
 
@@ -767,8 +801,16 @@ def starting_action_prompt_v1():
     return """
             You are a mother enrolled in the ARMMAN Maternal and Child Healthcare Mobile Health program. 
             ARMMAN is a non-governmental organization in India dedicated to reducing maternal and neonatal mortality among underprivileged communities. 
-            Through this program, you receive weekly preventive health information via automated voice messages. This week, instead of an automated message, you will receive a live service call from a health worker.
-
+            Through this program, you receive weekly preventive health information via automated voice messages. 
+            
+            This week, instead of an automated message, you will receive a live service call from a health worker with the aim to improve your engagement in the program.
+            This live call:
+              - Takes approximately the same time as automated messages
+              - Allows you to ask questions about your health concerns
+              - Provides personalized advice based on your specific situation
+              - Could be rescheduled if the timing doesn't work for you
+              - Connects you with a trained health worker who speaks your language
+    
             This is your starting week in the simulation as you have just enrolled in the program. 
 
             - **Your Background:**
@@ -792,6 +834,7 @@ def starting_action_prompt_v1():
             Being unable to answer a call that week implies a lack of engagement for that week.
 
             You will receive a live service call from a health worker this week, in your first week in the program.
+
             **Question:** Will you be engaged with the first live service call?
 
             Please provide the answer in the format: '##Yes##' for engagement OR '##No##' for lack of engagement.
@@ -804,6 +847,12 @@ def starting_action_prompt_v2():
     return """
             In this simulation, this is your starting week, as you have just enrolled in the program. 
             Instead of the usual automated message, you will receive a live service call from a health worker this week.
+            This live call:
+              - Takes approximately the same time as automated messages
+              - Allows you to ask questions about your health concerns
+              - Provides personalized advice based on your specific situation
+              - Could be rescheduled if the timing doesn't work for you
+              - Connects you with a trained health worker who speaks your language
 
             **Question:** Will you be engaged with the first live service call?
 
@@ -819,7 +868,13 @@ def starting_action_prompt_v3():
             ARMMAN is a non-profit organization in India focused on supporting maternal and neonatal health in underprivileged communities. 
             Through this program, you will receive weekly health guidance tailored to help you and your family.
 
-            As this is your starting week in the simulation, instead of the usual automated message, you will receive your first health guidance through a live service call from a health worker."
+            As this is your starting week in the simulation, instead of the usual automated message, you will receive your first health guidance through a live service call from a health worker.
+            This live call:
+              - Takes approximately the same time as automated messages
+              - Allows you to ask questions about your health concerns
+              - Provides personalized advice based on your specific situation
+              - Could be rescheduled if the timing doesn't work for you
+              - Connects you with a trained health worker who speaks your language
 
             - **Your Profile:**
               - Enrollment in the {enroll_gest_age} week of pregnancy.
@@ -850,6 +905,12 @@ def starting_action_prompt_v4():
             You are beginning your journey in the ARMMAN Maternal and Child Healthcare Mobile Health program. 
             Each week, you will receive an important health message designed to support you through pregnancy and early motherhood.
             For your first week, instead of an automated message, you will receive this guidance through a live service call from a health worker.
+            This live call:
+              - Takes approximately the same time as automated messages
+              - Allows you to ask questions about your health concerns
+              - Provides personalized advice based on your specific situation
+              - Could be rescheduled if the timing doesn't work for you
+              - Connects you with a trained health worker who speaks your language
 
             - **Your Background Information:**
               - Enrollment in week {enroll_gest_age} of pregnancy.
@@ -867,7 +928,7 @@ def starting_action_prompt_v4():
             **Reminder**: Engaging each week depends on your unique situation that day—phone availability, schedule, and personal priorities may all play a role. 
             Listening for more than 30 seconds shows engagement, while anything less (including not being able to answer the phone) implies no engagement.
 
-            **Question:** As you receive this first health message, will you choose to / be able to engage with it?
+            **Question:** As you receive this first health message, will you choose to / will you be able to engage with it?
 
             Respond only with '##Yes##' if you will engage or '##No##' if you will not engage.
             """
@@ -895,13 +956,18 @@ def starting_action_prompt_v5():
               - Days since your first call: {days_to_first_call}.
               - Pregnancy history: {g} pregnancies, {p} successful births, {s} stillbirth(s), and {l} living child(ren).
 
-            **Key Consideration**: Engagement may depend on factors like your schedule and phone availability, which may vary each week. 
+            **Key Consideration**: Engagement may depend on factors like your schedule and phone availability, which can vary each week. 
             If you don’t answer a call, this counts as non-engagement for that week.
 
             **Key Consideration**: "For your first week, instead of an automated message, you will receive a live service call from a health worker.
-            In subsequent weeks you will receive automated health messages.
+            This live call:
+              - Takes approximately the same time as automated messages
+              - Allows you to ask questions about your health concerns
+              - Provides personalized advice based on your specific situation
+              - Could be rescheduled if the timing doesn't work for you
+              - Connects you with a trained health worker who speaks your language
 
-            **Question**: As you receive this first health message, will you engage with it?
+            **Question**: As you receive this first health message, will you listen to and engage with it?
 
             **Response**: Please reply with '##Yes##' if you’ll engage or '##No##' if you won’t engage this week.
             """
