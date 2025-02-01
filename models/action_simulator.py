@@ -2,10 +2,9 @@ import argparse
 import pandas as pd
 
 from atomicwrites import atomic_write
-from sklearn.cluster import KMeans
-from scipy.spatial.distance import cdist
 
 from LLM_simulator import *
+from preprocess import * 
 
 
 def process_arm_with_action(arm, w, args, features, state_trajectories, action_trajectories, 
@@ -53,8 +52,8 @@ def process_arm_with_action(arm, w, args, features, state_trajectories, action_t
                 extraction_failures += 1
                 engagement_prediction = 0
             responses.append(engagement_prediction)
-        predictions.append(np.mean(responses))    # Average responses for this prompt template
-        individual_predictions.append(responses)  # Save individual predictions for each prompt
+        predictions.append(np.mean(responses))    # avg response for this prompt
+        individual_predictions.append(responses)  # individual predictions for each prompt
 
     final_engagement_prediction = np.mean(predictions)
 
@@ -226,41 +225,42 @@ if __name__ == "__main__":
     k = np.mean(counts[:6])/args.num_full_sample
 
     # get representative subset of num_arms (num acted on) mothers: k-means clustering with num_arms clusters
-    features_array = np.array(features)
-    kmeans = KMeans(n_clusters=args.num_arms, random_state=42, n_init=10)
-    kmeans.fit(features_array)
 
-    # Select closest mother to each cluster centroid --> this is our overall subsample
-    selected_indices = [np.argmin(cdist(features_array, [center])) for center in kmeans.cluster_centers_]
+    selected_indices = select_representative_mothers(
+        features_array=np.array(features),
+        state_trajectories=state_trajectories,
+        n_clusters=args.num_arms,
+        random_state=42
+    )
+
     representative_features = [features[i] for i in selected_indices]
     representative_states = [state_trajectories[i] for i in selected_indices]
     representative_actions = [action_trajectories[i] for i in selected_indices]
     
     # now, want to select a random subset of k*num_arms mothers to act on in each timestep 0-6: 
     num_to_act = int(np.round(k * args.num_arms))
-
-    assert len(representative_actions) >= 6 * num_to_act, "Not enough mothers in the representative group to act on."
-
-    selected_action_trajectories = np.zeros((args.num_arms, len(state_trajectories[0])))
+    print("Number of mothers to act on in each timestep: ", num_to_act)
+    selected_action_trajectories = np.zeros((len(representative_states), len(state_trajectories[0])))
 
     # Keep track of used indices
     used_indices = set()
     for t in range(6):
-        available_indices = np.setdiff1d(np.arange(len(representative_actions)), list(used_indices))  # Exclude used indices
-        rng = np.random.default_rng(42)   # NOW ALWAYS SAME RANDOM SET OF MOTHERS GET ACTED ON --> need this to aggregate models
-        selected_indices = rng.choice(available_indices, num_to_act, replace=False)
-
-        print(selected_indices)
-
-        used_indices.update(selected_indices)
-
-        # Set action to 1 for the selected mothers at the current timestep
-        for i in selected_indices:
+        available_indices = np.setdiff1d(np.arange(len(representative_states)), list(used_indices))
+        rng = np.random.default_rng(42)
+        selected_for_action = rng.choice(available_indices, num_to_act, replace=False)
+        
+        print(f"Time {t}, selected mothers:", selected_for_action)
+        
+        used_indices.update(selected_for_action)
+        
+        # Set action to 1 for selected mothers at this timestep
+        for i in selected_for_action:
             selected_action_trajectories[i][t] = 1
 
-    torun_actions = [selected_action_trajectories[i] for i in used_indices]
-    torun_states = [state_trajectories[i] for i in used_indices]
-    torun_features = [action_trajectories[i] for i in used_indices]
+    intervention_indices = list(used_indices)  # mothers who will receive interventions in the new sim
+    torun_actions = [selected_action_trajectories[i] for i in intervention_indices]
+    torun_states = [representative_states[i] for i in intervention_indices]
+    torun_features = [representative_features[i] for i in intervention_indices]
     
     # save actions to csv 
     stacked_actions = np.array(torun_actions)

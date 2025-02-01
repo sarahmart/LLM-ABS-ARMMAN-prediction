@@ -5,23 +5,17 @@
 def system_prompt():
     return """
     You are simulating the behavior of a mother enrolled in a maternal health program. 
-    Your goal is to predict how long the mother will listen to each automated health message (sent as a call to her cellphone) based on her sociodemographic characteristics and past interactions. 
-    Focus on simulating realistic and empathetic responses, considering her previous engagement and the context provided.
-    """
-
-def system_prompt_v2():
-    # no data -> no past interactions
-    return """
-    You are simulating the behavior of a mother enrolled in a maternal health program. 
-    Your goal is to predict how long the mother will listen to each automated health message (sent as a call to her cellphone) based on her sociodemographic characteristics. 
-    Focus on simulating realistic and empathetic responses, considering the context provided.
+    Your goal is to predict how long the mother will listen to each weekly automated health message (sent as a call to her cellphone) based on her sociodemographic characteristics. 
+    Each week, a mother will receive a new message tailored to her stage of pregnancy or motherhood and designed to keep her and her child healthy.
+    Focus on simulating realistic and empathetic responses, the context provided.
     """
 
 def system_prompt_action():
     return """
     You are simulating the behavior of a mother enrolled in a maternal health program. 
-    Your goal is to predict how long the mother will listen to each health message (which are given through cellphone calls) based on her sociodemographic characteristics and past interactions.
-    Focus on simulating realistic and empathetic responses, considering her previous engagement and the context provided.
+    Your goal is to predict how long the mother will listen to each weekly health message (sent as a call to her cellphone) based on her sociodemographic characteristics. 
+    Each week, a mother will receive a new message tailored to her stage of pregnancy or motherhood and designed to keep her and her child healthy.
+    Focus on simulating realistic and empathetic weekly responses, considering the context provided.
     """
 
 def system_prompt_empty():
@@ -55,7 +49,6 @@ def prompt_template_v1():
       - You prefer receiving calls in the {call_slot_preference}.
       - You enrolled in the program through the {channel_type} channel.
       - You are currently in the {enroll_delivery_status} stage of pregnancy.
-      - It has been {days_to_first_call} days since you received your first call.
       - You have been pregnant {g} times, with {p} successful births.
       - You have experienced {s} stillbirth(s) and have {l} living child(ren).
 
@@ -95,7 +88,6 @@ def prompt_template_v2():
       - You prefer receiving calls in the {call_slot_preference}.
       - You enrolled in the program through the {channel_type} channel.
       - You are currently in the {enroll_delivery_status} stage of pregnancy.
-      - It has been {days_to_first_call} days since you received your first call.
       - You have been pregnant {g} times, with {p} successful births.
       - You have experienced {s} stillbirth(s) and have {l} living child(ren).
 
@@ -150,7 +142,6 @@ def prompt_template_v4():
       - You prefer receiving calls in the {call_slot_preference}.
       - You enrolled in the program through the {channel_type} channel.
       - You are currently in the {enroll_delivery_status} stage of pregnancy.
-      - It has been {days_to_first_call} days since you received your first call.
       - You have been pregnant {g} times, with {p} successful births.
       - You have experienced {s} stillbirth(s) and have {l} living child(ren).
 
@@ -189,7 +180,6 @@ def bin_prompt_v1():
     You are a mother enrolled in the ARMMAN Maternal and Child Healthcare Mobile Health program. 
     ARMMAN is a non-governmental organization in India dedicated to reducing maternal and neonatal mortality among underprivileged communities. 
     Through this program, you receive weekly preventive health information via automated voice messages. 
-    While the program has been successful, maintaining consistent engagement is challenging, as listenership of any individual mother fluctuates weekly and many mothers tend to listen less over time. 
 
     In this simulation, each time step represents one week.
 
@@ -205,7 +195,6 @@ def bin_prompt_v1():
       - You prefer receiving calls in the {call_slot_preference} time slot.
       - You enrolled in the program through the {channel_type} channel.
       - You are currently in the {enroll_delivery_status} stage of pregnancy.
-      - It has been {days_to_first_call} days since you received your first call.
       - You have been pregnant {g} times, with {p} successful births.
       - You have experienced {s} stillbirth(s) and have {l} living child(ren).
 
@@ -216,8 +205,9 @@ def bin_prompt_v1():
     Based on this information, as well as the context of the program and on typical behavior of mothers in India,
     decide whether you will be engaged with the next automated health message.
 
-    **Key Consideration:** Engagement at one week does not imply engagement at the next (and the same for lack of engagement). 
-    Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
+    **Key Consideration:** 
+    Engagement at a previous week does not necessarily imply engagement at the next, and lack of engagement at a previous week does not necessarily imply future lack of engagement.
+    Do not make your decision based solely on past behaviour. Engagement should depend on your specific circumstances that week (e.g. need for reassurance or information, phone availability, schedule, etc.), which may fluctuate.
     Being unable to answer a call that week implies a lack of engagement for that week.
 
     **Question:** Will you be engaged with the next automated health message?
@@ -248,7 +238,6 @@ def bin_prompt_v2():
       - You prefer receiving calls in the {call_slot_preference}.
       - You enrolled in the program through the {channel_type} channel.
       - You are currently in the {enroll_delivery_status} stage of pregnancy.
-      - It has been {days_to_first_call} days since you received your first call.
       - You have been pregnant {g} times, with {p} successful births.
       - You have experienced {s} stillbirth(s) and have {l} living child(ren).
 
@@ -258,8 +247,9 @@ def bin_prompt_v2():
 
     **Key Consideration:** If you listen to a message for more than 30 seconds, it indicates that you are engaged with the program. Listening for less than 30 seconds suggests a lack of engagement.
 
-    **Key Consideration:** Engagement at one week does not imply engagement at the next (and the same for lack of engagement). 
-    Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
+    **Key Consideration:** 
+    Engagement at a previous week does not necessarily imply engagement at the next, and lack of engagement at a previous week does not necessarily imply future lack of engagement.
+    Do not make your decision based solely on past behaviour. Engagement should depend on your specific circumstances that week (e.g. phone availability, schedule, need for reassurance or information, etc.), which may fluctuate.
     Being unable to answer a call that week implies a lack of engagement for that week.
 
     **Question:** Will you be engaged with the next automated health message?
@@ -272,15 +262,16 @@ def bin_prompt_v3():
     """A minimal prompt focusing only on past behavior for a binary engagement decision."""
 
     return """
-    Based on the following record of your previous listening behavior and on typical behavior of mothers in India,
+    Based on the following information and on your knowledge of these kinds of interventions, as well as of typical behavior of mothers in India,
     decide whether you will be engaged with the next automated health message.
 
     - **Past Behavior:**
       The following is a record of your previous listening behavior:
       {past_behavior}
 
-    **Key Consideration:** Engagement at one week does not imply engagement at the next (and the same for lack of engagement). 
-    Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
+    **Key Consideration:** 
+    Engagement at a previous week does not necessarily imply engagement at the next, and lack of engagement at a previous week does not necessarily imply future lack of engagement.
+    Do not make your decision based solely on past behaviour. Engagement should depend on your specific circumstances that week (e.g. phone availability, schedule, need for reassurance or information, etc.), which may fluctuate.
     Being unable to answer a call that week implies a lack of engagement for that week.
 
     **Question:** Will you be engaged with the next automated health message?
@@ -295,7 +286,7 @@ def bin_prompt_v4():
     return """
     You are participating in the ARMMAN Maternal and Child Healthcare Mobile Health program, receiving weekly health updates to support your well-being and that of your child. 
     The program is vital to underprivileged communities in India, where consistent engagement with preventive health information can improve outcomes. 
-    However, staying consistently engaged each week can be challenging as various circumstances affect your ability to listen.
+    However, staying consistently engaged every week can be challenging as various circumstances may affect your ability to spend time on the phone.
 
     Each week in this simulation represents one opportunity to engage with health messages. Below is your background and recent weekly behavior.
 
@@ -309,7 +300,6 @@ def bin_prompt_v4():
       - Preferred call time: {call_slot_preference}.
       - Enrolled through: {channel_type}.
       - Pregnancy stage: {enroll_delivery_status}.
-      - Time since first call: {days_to_first_call} days.
       - Pregnancy history: {g} pregnancies, {p} successful births, {s} stillbirth(s), {l} living child(ren).
 
     - **Recent Weekly Listening Record:**
@@ -342,14 +332,14 @@ def bin_prompt_v5():
       - Preferred time for calls: {call_slot_preference}.
       - Enrollment channel: {channel_type}.
       - Current pregnancy stage: {enroll_delivery_status}.
-      - First call received {days_to_first_call} days ago.
       - Pregnancy history: {g} pregnancies, {p} live births, {s} stillbirth(s), {l} child(ren).
 
     - **Behavioral History:**
-      Below is a record of your recent listening behavior:
+      Below is a record of your recent listening weekly behavior:
       {past_behavior}
 
-    **Key Note**: Engagement each week depends on factors such as phone availability, schedule, or personal demands, which may vary. 
+    **Key Note**: Do not make your decision based solely on past behaviour.
+    Engagement each week depends on factors such as phone availability, schedule, or need for reassurance, which may vary. 
     If you do not answer the call in a given week, this is marked as non-engagement for that week.
 
     **Question**: Will you engage with the next health message?
@@ -367,6 +357,7 @@ def action_prompt_v1():
     return """
     You are a mother enrolled in the ARMMAN Maternal and Child Healthcare Mobile Health program. 
     ARMMAN is a non-governmental organization in India dedicated to reducing maternal and neonatal mortality among underprivileged communities. 
+    Through this program, you receive weekly preventive health information via brief phone calls. 
     In this simulation, each time step represents one week.
 
     Below is your background and history with the program.
@@ -381,7 +372,6 @@ def action_prompt_v1():
       - You prefer receiving calls in the {call_slot_preference} time slot.
       - You enrolled in the program through the {channel_type} channel.
       - You are currently in the {enroll_delivery_status} stage of pregnancy.
-      - It has been {days_to_first_call} days since you received your first call.
       - You have been pregnant {g} times, with {p} successful births.
       - You have experienced {s} stillbirth(s) and have {l} living child(ren).
 
@@ -389,14 +379,14 @@ def action_prompt_v1():
       The following is a record of your previous listening behavior (each representing one week):
       {past_behavior}
 
-    This week you receive a live call from a health worker aimed providing you with important information on good health practices for you and your baby.
-    Based on this information, and on typical behavior of mothers in India, decide whether you will be engaged with this live call and its health message.
-
-    **Key Consideration:** Engagement at one week does not imply engagement at the next, and the same for lack of engagement. 
-    Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
+    This week you receive a brief live call from a health worker aimed providing you with important information on good health practices for you and your baby.
+    Based on this information, as well as the context of the program and on typical behavior of mothers in India, decide whether you will be engaged with this live call and its health message.
+    
+    **Key Consideration:** Engagement at a previous week does not necessarily imply engagement at the next, and lack of engagement at a previous week does not necessarily imply future lack of engagement.
+    Do not make your decision based on past behaviour. Engagement should depend on your specific circumstances that week (e.g. phone availability, schedule, need for reassurance or information, etc.), which may fluctuate.
     Being unable to answer a call that week implies a lack of engagement for that week.
 
-    **Question:** Will you be engaged with this week's health message?
+    **Question:** Will you be engaged with this week's message from a health worker?
 
     Please respond with your final decision in the format: '##Yes##' for engagement or '##No##' for lack of engagement in this week.
     Your response need only contain one of the following: '##Yes##' OR '##No##'. No other text should be included. 
@@ -410,7 +400,7 @@ def action_prompt_v2():
     You are a mother enrolled in the ARMMAN Maternal and Child Healthcare Mobile Health program. 
     This program provides weekly preventive health messages to help reduce maternal and neonatal mortality.
     Below is your background and history with the program. 
-    Based on this information, and on typical behavior of mothers in India, decide whether you will be engaged with the next health message you receive.
+    Based on this information, and on typical behavior of mothers in India, decide whether you will be engaged with the next brief health message you receive.
 
     Each time step in this simulation represents one week.
     - **Your Background:**
@@ -423,22 +413,21 @@ def action_prompt_v2():
       - You prefer receiving calls in the {call_slot_preference}.
       - You enrolled in the program through the {channel_type} channel.
       - You are currently in the {enroll_delivery_status} stage of pregnancy.
-      - It has been {days_to_first_call} days since you received your first call.
       - You have been pregnant {g} times, with {p} successful births.
       - You have experienced {s} stillbirth(s) and have {l} living child(ren).
 
     - **Recent Behavior:**
-      The following is a record of your listening behavior:
+      The following is a record of your listening behavior in WEEKS:
       {past_behavior}
 
     **Key Consideration:** If you listen to the call and its message for more than 30 seconds, it indicates that you are engaged with the program. 
-    Listening for less than 30 seconds suggests a lack of engagement.
+    Listening for less than 30 seconds suggests a lack of engagement. In general, all messages are kept brief.
 
-    **Key Consideration:** Engagement at one week does not imply engagement at the next, and the same for lack of engagement. 
-    Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
+    **Key Consideration:** Engagement at a previous week does not necessarily imply engagement at the next, and lack of engagement at a previous week does not necessarily imply future lack of engagement.
+    Do not make your decision based solely on past behaviour. Engagement should depend on your specific circumstances that week (e.g. phone availability, schedule, need for reassurance or information, etc.), which may fluctuate.
     Being unable to answer a call that week implies a lack of engagement for that week.
         
-    **Question:** Will you be engaged with this week's health call from a health worker? Engaging with these messages helps you stay informed on best healthy practices. 
+    **Question:** Will you be engaged with this week's health call from a health worker? Engaging with these messages helps you stay informed on best healthy practices for you and your baby. 
 
     Please provide the answer in the format: '##Yes##' for engagement OR '##No##' for lack of engagement.
     """
@@ -448,17 +437,15 @@ def action_prompt_v3():
     """A minimal prompt focusing only on past behavior (not sociodemographic information) for a binary engagement decision based on a live service call."""
 
     return """
-    The following is a record of your previous listening behavior to health messages you have been receiving weekly by phone.
+    Based on the following information and on your knowledge of these kinds of interventions, as well as of typical behavior of mothers in India,
+    decide whether you will be engaged with the next next call from a health worker. Engaging with these brief calls helps you stay informed on health practices. 
 
     - **Past Behavior:**
       The following is a record of your previous listening behavior:
-      {past_behavior}
+      {past_behavior}    
 
-    Based on this record, and on typical behavior of mothers in India, decide whether you will be engaged with the next call from a health worker.
-    Engaging with these calls helps you stay informed on health practices. 
-
-    **Key Consideration:** Engagement at one week does not imply engagement at the next (and the same for lack of engagement). 
-    Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
+    **Key Consideration:** Engagement at a previous week does not necessarily imply engagement at the next, and lack of engagement at a previous week does not necessarily imply future lack of engagement.
+    Do not make your decision based on past behaviour. Engagement should depend on your specific circumstances that week (e.g. phone availability, schedule, need for reassurance or information, etc.), which may fluctuate.
     Being unable to answer a call that week implies a lack of engagement for that week.
 
     **Question:** Will you be engaged with this call from a health worker?
@@ -471,7 +458,7 @@ def action_prompt_v4():
     """Emphasizes the role of weekly engagement based on specific circumstances. Asks for a response to a live service call."""
 
     return """
-    You are participating in the ARMMAN Maternal and Child Healthcare Mobile Health program, receiving weekly health messages to support your well-being and that of your child. 
+    You are participating in the ARMMAN Maternal and Child Healthcare Mobile Health program, receiving short weekly health messages to support your well-being and that of your child. 
     The program is vital to underprivileged communities in India, where consistent engagement with health information improves health outcomes. 
 
     Each week in this simulation represents one opportunity to engage with health messages. Below is your background and recent weekly behavior.
@@ -486,13 +473,14 @@ def action_prompt_v4():
       - Preferred call time: {call_slot_preference}.
       - Enrolled through: {channel_type}.
       - Pregnancy stage: {enroll_delivery_status}.
-      - Time since first call: {days_to_first_call} days.
       - Pregnancy history: {g} pregnancies, {p} successful births, {s} stillbirth(s), {l} living child(ren).
 
     - **Recent Weekly Listening Record:**
       {past_behavior}
-
-    **Decision**: Will you engage with the upcoming call from a health worker, given your unique situation?
+      Do not make your decision based on past behaviour. 
+      Engagement should depend on factors such as need for reassurance, phone availability, or schedule, which may vary.
+    
+    **Decision**: Will you engage with the brief upcoming call from a health worker, given your unique situation?
 
     **Please answer** with '##Yes##' for engagement or '##No##' if you will not engage. Provide only one of these responses.
     """
@@ -502,11 +490,11 @@ def action_prompt_v5():
     """Encourages a weekly reflection based on background and recent program experience. Asks for a response to a live service call."""
 
     return """
-    As a mother enrolled in ARMMAN’s Maternal and Child Healthcare Program, you receive weekly health messages to support you during pregnancy and early motherhood. 
+    As a mother enrolled in ARMMAN’s Maternal and Child Healthcare Program, you receive short weekly health messages to support you during pregnancy and early motherhood. 
     Engaging with these messages helps you stay informed on health practices. 
 
     Each week in this simulation is a new chance to decide if you will engage with that week's health message. 
-    Below is your background and recent behavior with the program.
+    Below is your background and recent listening behavior.
 
     - **Your Background Information:**
       - Enrolled in week {enroll_gest_age} of pregnancy.
@@ -518,14 +506,13 @@ def action_prompt_v5():
       - Preferred time for calls: {call_slot_preference}.
       - Enrollment channel: {channel_type}.
       - Current pregnancy stage: {enroll_delivery_status}.
-      - First call received {days_to_first_call} days ago.
       - Pregnancy history: {g} pregnancies, {p} live births, {s} stillbirth(s), {l} child(ren).
 
     - **Behavioral History:**
       Below is a record of your recent listening behavior:
       {past_behavior}
 
-    **Key Note**: Engagement each week depends on factors such as phone availability, schedule, or personal demands, which may vary. 
+    **Key Note**: Engagement each week depends on factors such as phone availability, schedule, or need for reassurance, which may vary. 
     If you do not answer the call in a given week, this is marked as non-engagement for that week.
 
     **Question**: Will you engage with this week's call from a health worker?
@@ -556,7 +543,6 @@ def no_data_prompt():
       - You prefer receiving calls in the {call_slot_preference}.
       - You enrolled in the program through the {channel_type} channel.
       - You are currently in the {enroll_delivery_status} stage of pregnancy.
-      - It has been {days_to_first_call} days since you received your first call.
       - You have been pregnant {g} times, with {p} successful births.
       - You have experienced {s} stillbirth(s) and have {l} living child(ren).
 
@@ -576,7 +562,6 @@ def starting_prompt_v1():
             You are a mother enrolled in the ARMMAN Maternal and Child Healthcare Mobile Health program. 
             ARMMAN is a non-governmental organization in India dedicated to reducing maternal and neonatal mortality among underprivileged communities. 
             Through this program, you receive weekly preventive health information via automated voice messages. 
-            While the program has been successful, maintaining consistent engagement is challenging, as listenership of any individual mother fluctuates weekly and many mothers tend to listen less over time. 
 
             This is your starting week in the simulation as you have just enrolled in the program. 
 
@@ -590,12 +575,12 @@ def starting_prompt_v1():
             - You prefer receiving calls in the {call_slot_preference} time slot.
             - You enrolled in the program through the {channel_type} channel.
             - You are currently in the {enroll_delivery_status} stage of pregnancy.
-            - It has been {days_to_first_call} days since you received your first call.
             - You have been pregnant {g} times, with {p} successful births.
             - You have experienced {s} stillbirth(s) and have {l} living child(ren).
 
             **Key Consideration:** 
-            Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
+            Engagement at a previous week does not necessarily imply engagement at the next, and lack of engagement at a previous week does not necessarily imply future lack of engagement.
+            Engagement should depend on your specific circumstances that week (e.g. phone availability, schedule, need for reassurance or information, etc.), which may fluctuate.
             Being unable to answer a call that week implies a lack of engagement for that week.
 
             **Question:** As you receive the first automated health message, how long will you listen to it?
@@ -612,7 +597,6 @@ def starting_prompt_v2():
             You are a mother enrolled in the ARMMAN Maternal and Child Healthcare Mobile Health program. 
             ARMMAN is a non-governmental organization in India dedicated to reducing maternal and neonatal mortality among underprivileged communities. 
             Through this program, you receive weekly preventive health information via automated voice messages. 
-            While the program has been successful, maintaining consistent engagement is challenging, as many mothers tend to listen less over time. 
 
             This is your starting week in the simulation as you have just enrolled in the program. 
 
@@ -626,14 +610,14 @@ def starting_prompt_v2():
             - You prefer receiving calls in the {call_slot_preference} time slot.
             - You enrolled in the program through the {channel_type} channel.
             - You are currently in the {enroll_delivery_status} stage of pregnancy.
-            - It has been {days_to_first_call} days since you received your first call.
             - You have been pregnant {g} times, with {p} successful births.
             - You have experienced {s} stillbirth(s) and have {l} living child(ren).
 
             **Key Consideration:** If you listen to a message for more than 30 seconds, it indicates that you are engaged with the program. Listening for less than 30 seconds suggests a lack of engagement.
 
             **Key Consideration:** 
-            Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
+            Engagement at a previous week does not necessarily imply engagement at the next, and lack of engagement at a previous week does not necessarily imply future lack of engagement.
+            Engagement should depend on your specific circumstances that week (e.g. phone availability, schedule, need for reassurance or information, etc.), which may fluctuate.
             Being unable to answer a call that week implies a lack of engagement for that week.
 
             **Question:** Will you be engaged with the first automated health message?
@@ -674,11 +658,10 @@ def starting_prompt_v4():
               - Preferred call time: {call_slot_preference}.
               - Enrollment channel: {channel_type}.
               - Pregnancy stage: {enroll_delivery_status}.
-              - Days since first call: {days_to_first_call}.
               - Pregnancy history: {g} pregnancies, {p} live births, {s} stillbirth(s), {l} living child(ren).
 
-            **Key Note**: Engaging with this program can be beneficial for you and your baby’s health. 
-            However, whether you engage with each message may depend on your schedule, phone availability, and specific needs at any given time.
+            **Key Note**: Engagement each week depends on factors such as phone availability, schedule, or need for reassurance, which may vary. 
+            If you do not answer the call in a given week, this is marked as non-engagement for that week.
 
             **Question:** Will you listen to and engage with this first health message?
 
@@ -703,10 +686,9 @@ def starting_prompt_v5():
               - Preferred time for calls: {call_slot_preference}.
               - Program enrollment through: {channel_type}.
               - Pregnancy stage: {enroll_delivery_status}.
-              - Days since first call: {days_to_first_call}.
               - History: {g} pregnancies, {p} live births, {s} stillbirth(s), and {l} child(ren) currently.
 
-            **Reminder**: Engaging each week depends on your unique situation that day—phone availability, schedule, and personal priorities may all play a role. 
+            **Reminder**: Engaging each week depends on your unique situation that day—phone availability, schedule, and personal need for information or reassurance may all play a role. 
             Listening for more than 30 seconds shows engagement, while anything less implies no engagement.
 
             **Question:** As you receive this first health message, will you choose to / be able to engage with it?
@@ -734,10 +716,9 @@ def starting_prompt_v6():
               - Preferred time for calls: {call_slot_preference}.
               - Enrollment through: {channel_type}.
               - Pregnancy stage: {enroll_delivery_status}.
-              - Days since your first call: {days_to_first_call}.
               - Pregnancy history: {g} pregnancies, {p} successful births, {s} stillbirth(s), and {l} living child(ren).
 
-            **Key Consideration**: Engagement may depend on factors like your schedule and phone availability, which may vary each week. 
+            **Key Consideration**: Engagement may depend on factors like your schedule, phone availability, or need for information, which may vary each week. 
             If you don’t answer a call, this counts as non-engagement for that week.
 
             **Question**: As you receive this first health message, will you choose to engage with it?
@@ -768,14 +749,14 @@ def starting_action_prompt_v1():
             - You prefer receiving calls in the {call_slot_preference} time slot.
             - You enrolled in the program through the {channel_type} channel.
             - You are currently in the {enroll_delivery_status} stage of pregnancy.
-            - It has been {days_to_first_call} days since you received your first call.
             - You have been pregnant {g} times, with {p} successful births.
             - You have experienced {s} stillbirth(s) and have {l} living child(ren).
 
             **Key Consideration:** If you listen to the call or message for more than 30 seconds, it indicates that you are engaged with the program. Listening for less than 30 seconds suggests a lack of engagement.
 
             **Key Consideration:** 
-            Engagement should also depend on your specific circumstances that week (e.g. phone availability, schedule, etc.), which may fluctuate.
+            Engagement at a previous week does not necessarily imply engagement at the next, and lack of engagement at a previous week does not necessarily imply future lack of engagement.
+            Engagement should depend on your specific circumstances that week (e.g. phone availability, schedule, need for reassurance or information, etc.), which may fluctuate.
             Being unable to answer a call that week implies a lack of engagement for that week.
 
             You will receive a live call from a health worker this week, in your first week in the program.
@@ -817,7 +798,6 @@ def starting_action_prompt_v3():
               - Preferred call time: {call_slot_preference}.
               - Enrollment channel: {channel_type}.
               - Pregnancy stage: {enroll_delivery_status}.
-              - Days since first call: {days_to_first_call}.
               - Pregnancy history: {g} pregnancies, {p} live births, {s} stillbirth(s), {l} living child(ren).
 
             **Key Note**: Engaging with this program can be beneficial for your and your baby’s health. 
@@ -846,10 +826,9 @@ def starting_action_prompt_v4():
               - Preferred time for calls: {call_slot_preference}.
               - Program enrollment through: {channel_type}.
               - Pregnancy stage: {enroll_delivery_status}.
-              - Days since first call: {days_to_first_call}.
               - History: {g} pregnancies, {p} live births, {s} stillbirth(s), and {l} child(ren) currently.
 
-            **Reminder**: Engaging each week depends on your unique situation that day—phone availability, schedule, and personal priorities may all play a role. 
+            **Reminder**: Engaging each week depends on your unique situation that day—phone availability, schedule, and personal need for reassurance may all play a role. 
             Listening for more than 30 seconds shows engagement, while anything less (including not being able to answer the phone) implies no engagement.
 
             **Question:** As you receive this first health message as a call from a health worker, will you choose to / will you be able to engage with it?
@@ -877,10 +856,9 @@ def starting_action_prompt_v5():
               - Preferred time for calls: {call_slot_preference}.
               - Enrollment through: {channel_type}.
               - Pregnancy stage: {enroll_delivery_status}.
-              - Days since your first call: {days_to_first_call}.
               - Pregnancy history: {g} pregnancies, {p} successful births, {s} stillbirth(s), and {l} living child(ren).
 
-            **Key Consideration**: Engagement may depend on factors like your schedule and phone availability, which can vary each week. 
+            **Key Consideration**: Engagement may depend on factors like your schedule, phone availability, and need for relevant information, which can vary each week. 
             If you don’t answer a call, this counts as non-engagement for that week.
 
             **Question**: As you receive this first health message as a call from a health worker, will you listen to and engage with it?
