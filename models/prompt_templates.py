@@ -5,15 +5,15 @@
 def system_prompt():
     return """
     You are simulating the behavior of a mother enrolled in a maternal health program. 
-    Your goal is to predict how long the mother will listen to each weekly automated health message (sent as a call to her cellphone) based on her sociodemographic characteristics. 
+    Your goal is to predict how long the mother will listen to each short weekly automated health message (sent as a call to her cellphone) based on her sociodemographic characteristics. 
     Each week, a mother will receive a new message tailored to her stage of pregnancy or motherhood and designed to keep her and her child healthy.
-    Focus on simulating realistic and empathetic responses, the context provided.
+    Focus on simulating realistic and empathetic responses, considering the context provided.
     """
 
 def system_prompt_action():
     return """
     You are simulating the behavior of a mother enrolled in a maternal health program. 
-    Your goal is to predict how long the mother will listen to each weekly health message (sent as a call to her cellphone) based on her sociodemographic characteristics. 
+    Your goal is to predict how long the mother will listen to each short weekly health message (sent as a call to her cellphone) based on her sociodemographic characteristics. 
     Each week, a mother will receive a new message tailored to her stage of pregnancy or motherhood and designed to keep her and her child healthy.
     Focus on simulating realistic and empathetic weekly responses, considering the context provided.
     """
