@@ -40,7 +40,7 @@ def process_arm_with_action(arm, w, args, features, state_trajectories, action_t
         mapped_features = map_features_to_prompt(arm_features, arm_states, arm_actions)
         prompt_text = [generate_prompt(mapped_features, prompt_template) for prompt_template in prompt_templates]
 
-    # Compute ground truth for this arm
+    # ground truth for this arm
     ground_truth = 1 if np.array(state_trajectories[arm][w]) > 30 else 0
 
     # Collect predictions
@@ -165,7 +165,7 @@ def process_data_weekly_with_actions(args, config, features, state_trajectories,
 
                 arms_progress.close()
 
-            # Save any remaining results in buffer
+            # Save remaining results in buffer
             if arm_results_buffer:
                 save_arm_results_batch(arm_results_buffer, output_dir, w)
 
@@ -201,21 +201,21 @@ if __name__ == "__main__":
     parser.add_argument("--num_arms", type=int, default=100, help="Number of mothers on whom to simulate actions.")
     parser.add_argument("--config_path", type=str, default="openai_config.json", help="Path to the LLM API configuration file.")
     parser.add_argument("--t1", type=int, default=0, help="Start month for LLM predictions.")
-    parser.add_argument("--t2", type=int, default=10, help="End month for LLM predictions.")
+    parser.add_argument("--t2", type=int, default=15, help="End month for LLM predictions.")
     parser.add_argument("--num_queries", type=int, default=5, help="Number of queries to LLM for each prompt.") 
 
     args = parser.parse_args()
 
     engine = load_config(args.config_path)
 
+    # get features, state_trajectories, action_trajectories from data for large sample
     features, state_trajectories, action_trajectories = data_preprocessing(args.data_path)
-
     features = features[:args.num_full_sample]
     state_trajectories = state_trajectories[0:args.num_full_sample]
     state_trajectories = [[1 if time > 30 else 0 for time in arm] for arm in state_trajectories]
     action_trajectories = action_trajectories[0:args.num_full_sample]
 
-    # select all mothers who were acted on
+    # select all mothers who were actually acted on
     act_on = [i for i, arm in enumerate(action_trajectories) if any(arm)]
     # subset of actions for the mothers who were intervened on
     acted_actions = [action_trajectories[i] for i in act_on]
@@ -225,7 +225,6 @@ if __name__ == "__main__":
     k = np.mean(counts[:6])/args.num_full_sample
 
     # get representative subset of num_arms (num acted on) mothers: k-means clustering with num_arms clusters
-
     selected_indices = select_representative_mothers(
         features_array=np.array(features),
         state_trajectories=state_trajectories,
@@ -237,27 +236,26 @@ if __name__ == "__main__":
     representative_states = [state_trajectories[i] for i in selected_indices]
     representative_actions = [action_trajectories[i] for i in selected_indices]
     
-    # now, want to select a random subset of k*num_arms mothers to act on in each timestep 0-6: 
+    # select a random subset of k*num_arms mothers to act on in each timestep 0-6: 
     num_to_act = int(np.round(k * args.num_arms))
     print("Number of mothers to act on in each timestep: ", num_to_act)
-    selected_action_trajectories = np.zeros((len(representative_states), len(state_trajectories[0])))
 
-    # Keep track of used indices
-    used_indices = set()
+    selected_action_trajectories = np.zeros((len(representative_states), len(state_trajectories[0])))
+    # mothers who will receive interventions in the new sim
+    intervention_indices = [] 
     for t in range(6):
-        available_indices = np.setdiff1d(np.arange(len(representative_states)), list(used_indices))
-        rng = np.random.default_rng(42)
+        available_indices = np.setdiff1d(np.arange(len(representative_states)), intervention_indices)
+        rng = np.random.default_rng(42 + t)
         selected_for_action = rng.choice(available_indices, num_to_act, replace=False)
         
         print(f"Time {t}, selected mothers:", selected_for_action)
         
-        used_indices.update(selected_for_action)
+        intervention_indices.extend(selected_for_action)
         
         # Set action to 1 for selected mothers at this timestep
         for i in selected_for_action:
             selected_action_trajectories[i][t] = 1
 
-    intervention_indices = list(used_indices)  # mothers who will receive interventions in the new sim
     torun_actions = [selected_action_trajectories[i] for i in intervention_indices]
     torun_states = [representative_states[i] for i in intervention_indices]
     torun_features = [representative_features[i] for i in intervention_indices]
@@ -265,12 +263,12 @@ if __name__ == "__main__":
     # save actions to csv 
     stacked_actions = np.array(torun_actions)
     df = pd.DataFrame(stacked_actions)
-    df.insert(0, "Mother Index", list(used_indices))  
+    df.insert(0, "Mother Index", intervention_indices)  
     df.to_csv(f"./results/actions/action_trajectories_{len(torun_actions)}_t1_{args.t1}_t2_{args.t2}.csv", index=False)
 
     sys_prompt = system_prompt_action()
 
-    # Process the data and compute errors for monthly engagement with new mothers joining each month
+    # Process data
     (all_ground_truths, 
      all_binary_predictions, 
      extraction_failures) = process_data_weekly_with_actions(args, 
@@ -280,10 +278,7 @@ if __name__ == "__main__":
                                                              torun_actions, 
                                                              sys_prompt)
     
-    # Compute total accuracy, F1 score, and log likelihood
-    total_accuracy, total_f1_score, total_log_likelihood = compute_total_metrics(all_binary_predictions, all_ground_truths, args.t1, args.t2)
-
-    # Flatten the lists before saving
+    # Flatten before saving
     flat_ground_truths = [item for sublist in all_ground_truths for item in sublist]
     flat_binary_predictions = [item for sublist in all_binary_predictions for item in sublist]
 
@@ -291,15 +286,3 @@ if __name__ == "__main__":
     model = args.config_path.split('_')[0]
     np.save(f"./results/actions/{model}_{args.num_arms}/engagement_gpt_ground_truths_t1_{args.t1}_t2_{args.t2}.npy", np.array(flat_ground_truths))
     np.save(f"./results/actions/{model}_{args.num_arms}/engagement_gpt_binary_predictions_t1_{args.t1}_t2_{args.t2}.npy", np.array(flat_binary_predictions))
-
-    # Log final results in a text file, also save the metrics per step
-    with open(f"./results/actions/{model}_{args.num_arms}/engagement_gpt_predictions_summary_t1_{args.t1}_t2_{args.t2}.txt", "w") as summary_file:
-        summary_file.write(f"Total Accuracy: {total_accuracy}\n")
-        summary_file.write(f"Total F1 Score: {total_f1_score}\n")
-        summary_file.write(f"Total Log Likelihood: {total_log_likelihood}\n")
-        summary_file.write(f"Number of Extraction Failures: {extraction_failures}\n")
-
-    print(f"Total Accuracy: {total_accuracy}")
-    print(f"Total F1 Score: {total_f1_score}")
-    print(f"Total Log Likelihood: {total_log_likelihood}")
-    print(f"Number of Extraction Failures: {extraction_failures}")
