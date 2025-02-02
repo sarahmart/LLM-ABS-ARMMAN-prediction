@@ -13,8 +13,10 @@ from vertexai.generative_models import GenerativeModel
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from requests.exceptions import Timeout
+from requests.adapters import HTTPAdapter
 from sklearn.metrics import f1_score
 from tqdm import tqdm
+from urllib3.util.retry import Retry
 
 from preprocess import data_preprocessing, map_features_to_prompt
 from prompt_templates import *
@@ -102,48 +104,45 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
     # Exponential backoff --> needed for Anthropic models
     initial_backoff = 2  # Start with 2 seconds 
     max_backoff = 120    # Cap backoff time at 2 mins (??)
-    backoff_time = initial_backoff
-    backoff_failures = 0  
-    max_backoff_failures = 10 # Terminate if too many successive failures
+    connection_timeout = 30  # Connection timeout 
+    read_timeout = 120       # Read timeout
+    
+    session = requests.Session()
+    # Configure retry strategy session
+    retry_strategy = Retry(
+        total=max_retries,
+        backoff_factor=2,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["POST"]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
 
     for attempt in range(max_retries):
         try:
             if "google" in model:
                 response = google_model.generate_content(sys_prompt + user_prompt)
                 prediction = response.text
-                backoff_failures = 0
             else:
-                response = requests.post(config["api_url"], headers=headers, data=json.dumps(data), timeout=120)
+                response = session.post(
+                    config["api_url"],
+                    headers=headers,
+                    json=data, 
+                    timeout=(connection_timeout, read_timeout)
+                )
                 
-                # Handle rate-limiting for Anthropic
-                if response.status_code == 429:  # Too Many Requests
-                    retry_after = int(response.headers.get("Retry-After", backoff_time))
+                # Handle rate limiting
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", initial_backoff))
                     print(f"Rate limit hit. Retrying after {retry_after} seconds.")
                     time.sleep(retry_after)
-                    backoff_failures += 1 if retry_after >= max_backoff else 0
-                    if backoff_failures >= max_backoff_failures:
-                        print(f"Auto-terminating: Exceeded {max_backoff_failures} successive max backoff events (too many API failures).")
-                        return "error", None
                     continue
-
-                if response.status_code != 200:
-                    print(f"API request failed with status {response.status_code}: {response.text}")
-                    time.sleep(backoff_time) 
-                    random_millisecs = random.randint(0, 1000) / 1000  # Random milisecs to avoid clients synchronising
-                    backoff_time = min((2 ** attempt) + random_millisecs, max_backoff) # Double backoff time, cap at max_backoff
-                    
-                    # Increment / reset successive backoff failures
-                    if backoff_time == max_backoff:
-                        backoff_failures += 1
-                        if backoff_failures >= max_backoff_failures:
-                            print(f"Auto-terminating: Exceeded {max_backoff_failures} successive max backoff events (too many API failures).")
-                            return "error", None
-                    else:
-                        backoff_failures = 0
-
-                    continue
-
-                # Extract prediction
+                
+                # Raise for any other bad status
+                response.raise_for_status()
+                
+                # Extract prediction based on model type
                 response_data = response.json()
                 if "openai" in model:
                     prediction = response_data["choices"][0]["message"]["content"]
@@ -151,72 +150,49 @@ def LLM_eval(config: dict, model: str, sys_prompt: str, user_prompt: str, max_re
                     prediction = response_data["content"][0]["text"]
                 elif "meta" in model:
                     prediction = response_data["generation"]
-
-                # Reset backoff_failures on success
-                backoff_failures = 0
-
+                
+            # Validate prediction
             if "#Yes#" in prediction and "#No#" in prediction:
                 raise ValueError("Prediction not consistent.")
             elif "#Yes#" in prediction:
-                return 1, prediction   # Engaged
+                return 1, prediction
             elif "#No#" in prediction:
-                return 0, prediction   # Not Engaged
+                return 0, prediction
             else:
                 raise ValueError("Prediction does not follow the expected format.")
-            
-        except ValueError as ex:
-            print(f"Extraction failed on attempt {attempt + 1}: {ex}")
-            if attempt < max_retries - 1:
-                print(f"Retrying after {backoff_time} seconds...")
-                time.sleep(backoff_time)
-                random_millisecs = random.randint(0, 1000) / 1000 
-                backoff_time = min((2 ** attempt) + random_millisecs, max_backoff) 
-
-                # Increment or reset successive backoff failures
-                if backoff_time == max_backoff:
-                    backoff_failures += 1
-                    if backoff_failures >= max_backoff_failures:
-                        print(f"Auto-terminating: Exceeded {max_backoff_failures} successive max backoff events (too many API failures).")
-                        return "error", None
-                else:
-                    backoff_failures = 0
-
-        except Timeout:
-            print(f"Request timed out after 2 mins.")
-            if attempt < max_retries - 1:
-                print(f"Retrying after {backoff_time} seconds...")
-                time.sleep(backoff_time)
-                random_millisecs = random.randint(0, 1000) / 1000  
-                backoff_time = min((2 ** attempt) + random_millisecs, max_backoff) 
-
-                # Increment or reset successive backoff failures
-                if backoff_time == max_backoff:
-                    backoff_failures += 1
-                    if backoff_failures >= max_backoff_failures:
-                        print(f"Auto-terminating: Exceeded {max_backoff_failures} successive max backoff  (too many API failures).")
-                        return "error", None
-                else:
-                    backoff_failures = 0
                 
-        
-        except Exception as ex:
-            print(f"Unexpected error: {ex}")
-            time.sleep(backoff_time)
-            random_millisecs = random.randint(0, 1000) / 1000  
-            backoff_time = min((2 ** attempt) + random_millisecs, max_backoff)
+        except requests.exceptions.ConnectionError as e:
+            print(f"Connection error on attempt {attempt + 1}: {e}")
+            if attempt >= max_retries - 1:
+                return "error", None
+            # longer backoff for connection issues
+            time.sleep(min(initial_backoff * (2 ** attempt), max_backoff))
+            
+        except requests.exceptions.Timeout as e:
+            print(f"Timeout error on attempt {attempt + 1}: {e}")
+            if attempt >= max_retries - 1:
+                return "error", None
+            time.sleep(min(initial_backoff * (2 ** attempt), max_backoff))
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Request error on attempt {attempt + 1}: {e}")
+            if attempt >= max_retries - 1:
+                return "error", None
+            time.sleep(min(initial_backoff * (2 ** attempt), max_backoff))
+            
+        except ValueError as e:
+            print(f"Validation error on attempt {attempt + 1}: {e}")
+            if attempt >= max_retries - 1:
+                return "error", None
+            time.sleep(initial_backoff)
+            
+        except Exception as e:
+            print(f"Unexpected error on attempt {attempt + 1}: {e}")
+            if attempt >= max_retries - 1:
+                return "error", None
+            time.sleep(min(initial_backoff * (2 ** attempt), max_backoff))
 
-            # Increment or reset successive backoff failures
-            if backoff_time == max_backoff:
-                backoff_failures += 1
-                if backoff_failures >= max_backoff_failures:
-                    print(f"Auto-terminating: Exceeded {max_backoff_failures} successive max backoff events (too many API failures).")
-                    return "error", None
-            else:
-                backoff_failures = 0
-
-            continue 
-
-    return "error", None  
+    return "error", None
 
 
 def generate_prompt(mapped_features, prompt_template):
