@@ -75,7 +75,7 @@ def process_data_weekly_with_actions(args, config, features, state_trajectories,
     ground_truths = []
 
     model = args.config_path.split('_')[0]
-    output_dir = f"./results/actions/{model}_{args.num_arms}"
+    output_dir = f"./results/{args.sub_dir}/{model}_{args.num_arms}"
     os.makedirs(output_dir, exist_ok=True)
 
     def load_last_valid_state(output_dir, w):
@@ -91,9 +91,14 @@ def process_data_weekly_with_actions(args, config, features, state_trajectories,
             with atomic_write(f"{output_dir}/arm_results_week_{week}_arm_{arm}.json", overwrite=True) as f:
                 json.dump(result, f, indent=4)
 
-    def cleanup_intermediate_files(output_dir, current_week):
-        for f in glob.glob(f"{output_dir}/arm_results_week_{current_week-1}_arm_*.json"):
-            os.remove(f)
+    def cleanup_intermediate_files(output_dir, current_week, structured_results):
+        # delete arm results once added to structured results
+        if current_week - 1 in structured_results:
+            completed_arms = set(structured_results[current_week - 1].keys())
+            for f in glob.glob(f"{output_dir}/arm_results_week_{current_week-1}_arm_*.json"):
+                arm = int(f.split("_arm_")[1].split(".")[0])
+                if arm in completed_arms:
+                    os.remove(f)
 
     saved_weeks = glob.glob(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}_week_*.json")
     if saved_weeks:
@@ -123,10 +128,23 @@ def process_data_weekly_with_actions(args, config, features, state_trajectories,
             structured_results[w] = {}
             saved_arm_files = glob.glob(f"{output_dir}/arm_results_week_{w}_arm_*.json")
             completed_arms = set(int(f.split("_arm_")[1].split(".")[0]) for f in saved_arm_files)
+            
+            # load existing results from this week's completed arms (if exist)
+            for arm_file in saved_arm_files:
+                with open(arm_file) as f:
+                    result = json.load(f)
+                    arm = result['arm']
+                    structured_results[w][arm] = {"responses": result['individual_predictions']}
+                    all_binary_predictions[w].append(result['final_engagement_prediction'])
+                    all_ground_truths[w].append(result['ground_truth'])
+                    all_individual_predictions.append(result['individual_predictions'])
+
+            # only process arms that haven't been completed
             arm_results_buffer = []
+            arms_to_process = [arm for arm in range(running_arms) if arm not in completed_arms]
 
             with ThreadPoolExecutor(max_workers=10) as executor:
-                arms_progress = tqdm(total=running_arms, desc=f"Week {w} arms", leave=False, file=sys.stdout)
+                arms_progress = tqdm(total=len(arms_to_process), desc=f"Week {w} arms", leave=False, file=sys.stdout)
                 futures = [
                     executor.submit(
                         process_arm_with_action,
@@ -134,7 +152,7 @@ def process_data_weekly_with_actions(args, config, features, state_trajectories,
                         sys_prompt, config, prompt_templates, starting_prompt_templates,
                         action_prompt_templates, starting_action_prompt_templates, extraction_failures
                     )
-                    for arm in range(running_arms) if arm not in completed_arms
+                    for arm in arms_to_process
                 ]
 
                 for future in futures:
@@ -178,7 +196,7 @@ def process_data_weekly_with_actions(args, config, features, state_trajectories,
             with atomic_write(f"{output_dir}/ground_truths_t1_{args.t1}_t2_{args.t2}_week_{w}.json", overwrite=True) as f:
                 json.dump(all_ground_truths, f, indent=4)
 
-            cleanup_intermediate_files(output_dir, w)
+            cleanup_intermediate_files(output_dir, w, structured_results)
 
     # Save final results
     with atomic_write(f"{output_dir}/all_individual_predictions_t1_{args.t1}_t2_{args.t2}.json", overwrite=True) as f:
@@ -189,6 +207,9 @@ def process_data_weekly_with_actions(args, config, features, state_trajectories,
 
     with atomic_write(f"{output_dir}/structured_results_t1_{args.t1}_t2_{args.t2}.json", overwrite=True) as f:
         json.dump(structured_results, f, indent=4)
+        
+    # clean up final week's arm files
+    cleanup_intermediate_files(output_dir, args.t2, structured_results)
 
     return (all_ground_truths, all_binary_predictions, extraction_failures)
 
@@ -203,6 +224,7 @@ if __name__ == "__main__":
     parser.add_argument("--t1", type=int, default=0, help="Start month for LLM predictions.")
     parser.add_argument("--t2", type=int, default=15, help="End month for LLM predictions.")
     parser.add_argument("--num_queries", type=int, default=5, help="Number of queries to LLM for each prompt.") 
+    parser.add_argument("--sub_dir", type=str, default='actions', help="Subdirectory to store results in.")
 
     args = parser.parse_args()
 
@@ -264,7 +286,7 @@ if __name__ == "__main__":
     stacked_actions = np.array(torun_actions)
     df = pd.DataFrame(stacked_actions)
     df.insert(0, "Mother Index", intervention_indices)  
-    df.to_csv(f"./results/actions/action_trajectories_{len(torun_actions)}_t1_{args.t1}_t2_{args.t2}.csv", index=False)
+    df.to_csv(f"./results/{args.sub_dir}/action_trajectories_{len(torun_actions)}_t1_{args.t1}_t2_{args.t2}.csv", index=False)
 
     sys_prompt = system_prompt_action()
 
@@ -284,5 +306,5 @@ if __name__ == "__main__":
 
     # Save to results/actions/model_num_arms_t1_t2
     model = args.config_path.split('_')[0]
-    np.save(f"./results/actions/{model}_{args.num_arms}/engagement_gpt_ground_truths_t1_{args.t1}_t2_{args.t2}.npy", np.array(flat_ground_truths))
-    np.save(f"./results/actions/{model}_{args.num_arms}/engagement_gpt_binary_predictions_t1_{args.t1}_t2_{args.t2}.npy", np.array(flat_binary_predictions))
+    np.save(f"./results/{args.sub_dir}/{model}_{args.num_arms}/engagement_gpt_ground_truths_t1_{args.t1}_t2_{args.t2}.npy", np.array(flat_ground_truths))
+    np.save(f"./results/{args.sub_dir}/{model}_{args.num_arms}/engagement_gpt_binary_predictions_t1_{args.t1}_t2_{args.t2}.npy", np.array(flat_binary_predictions))
