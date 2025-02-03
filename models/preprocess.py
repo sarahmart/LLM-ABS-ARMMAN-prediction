@@ -44,7 +44,7 @@ def data_preprocessing(data_path, groups=['random']):
     return features, state_trajectories, action_trajectories
 
 
-def map_features_to_prompt(features, past_listening_times, past_actions, first_week=False):
+def map_features_to_prompt(features, past_listening_times, past_actions, first_week=False, no_actions=False):
     """Map features to their corresponding categories and return a dictionary."""
     age_categories = ["<20", "20-24", "25-29", "30-34", "35+"]
     languages = ["Hindi", "Marathi", "Kannada", "Gujarati", "English"]
@@ -70,10 +70,17 @@ def map_features_to_prompt(features, past_listening_times, past_actions, first_w
     if not first_week:
 
         # Modify past behavior to show "Engaged" or "Not Engaged" based on past listening times
-        past_behavior = "\n".join(
-            [f"  - Month {i+1}: {'Engaged' if time > 30 else 'Not Engaged'}, Action: {'Received service call' if action == 1 else 'No service call'}"
-            for i, (time, action) in enumerate(zip(past_listening_times, past_actions))]
-        )
+        # Include action details only if no_actions is False, else remove
+        if no_actions:
+            past_behavior = "\n".join(
+                [f"  - Month {i+1}: {'Engaged' if time > 30 else 'Not Engaged'}"
+                for i, time in enumerate(past_listening_times)]
+            )
+        else:
+            past_behavior = "\n".join(
+                [f"  - Month {i+1}: {'Engaged' if time > 30 else 'Not Engaged'}, Action: {'Received service call' if action == 1 else 'No service call'}"
+                for i, (time, action) in enumerate(zip(past_listening_times, past_actions))]
+            )
         mapped_features = {
         "enroll_gest_age": features[0],
         "enroll_delivery_status": "pregnant" if features[1] == 0 else "delivered",
