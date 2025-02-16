@@ -206,42 +206,106 @@ def plot_accuracy_by_feature(df, features=None, metric='accuracy',
     plt.show()
 
 
-def plot_engagement_over_time(models, model_labels, model_results, ground_truths, labels=None):
+def plot_engagement_over_time(models, model_labels, model_results, 
+                              ground_truths, agg, avg, lowest_unc):
+    """
+    Plot mean engagement vs time in subplots (pairs of models per subplot),
+    alongside ground truth, direct averaging, lowest uncertainty, and 
+    uncertainty-weighted aggregation.
+    """
 
-    # mean engagement per week for ground truths --> transpose if shape is (num_weeks, num_mothers)
-    if ground_truths.shape[0] < ground_truths.shape[1]: 
+    # Compute mean engagement for ground truth
+    if ground_truths.shape[0] < ground_truths.shape[1]:
         ground_truths = ground_truths.T
-    gcs = np.array(ground_truths)  # (num_mothers, num_weeks)
-    engagement_over_time = np.mean(gcs, axis=0) 
+    gcs = np.array(ground_truths)  
+    engagement_over_time = np.mean(gcs, axis=0)  
 
-    # Plot engagement over time
-    plt.figure(figsize=(15, 6))
+    # Compute mean engagement (and std) for each ensemble approach
+    agg_mean = np.mean(np.array(agg), axis=1)
+    avg_mean = np.mean(np.array(avg), axis=1)
+    low_mean = np.mean(np.array(lowest_unc), axis=1)
+
+    # Prepare subplots for adjacent pairs of models
+    num_pairs = (len(models) + 1) // 2
+    fig, axes = plt.subplots(num_pairs, 1, figsize=(10, 3 * num_pairs), 
+                             sharex=True, sharey=False)
+    if num_pairs == 1:
+        axes = [axes]  # Ensure axes is iterable if there's only one pair
 
     cmap = matplotlib.colormaps['Paired']
     colors = [cmap(i) for i in range(12)]
-    colors = [colors[i] for i in [0,1,2,3,6,7,8,9,4,5,10,11]]
+    colors = [colors[i] for i in [0,1,2,3,7,6,8,9,4,5,10,11]]
+    labels = ['Google', 'OpenAI', 'Anthropic']
 
-    # Plot Ground Truth Engagement
-    plt.plot(range(1, len(engagement_over_time) + 1), engagement_over_time, 
-            marker="o", markersize=5, linestyle="-", color="black", label="Ground Truth Engagement")
+    line_low, line_avg, line_agg, line_gc = None, None, None, None
 
-    # Plot predicted engagement for each model
-    for i, model in enumerate(models):
-        # mean engagement per week
-        model_predictions = np.array(model_results[model]["mean_predictions"])  # (num_time_steps, num_mothers)
-        mean_engagement_predictions = np.mean(model_predictions, axis=1)  # avg  over all mothers
+    for idx in range(num_pairs):
+        ax = axes[idx]
 
-        plt.plot(range(1, len(mean_engagement_predictions) + 1), mean_engagement_predictions, 
-                    marker="o", linestyle="--", markersize=4, color=colors[i],
-                    label=f"{model_labels[i]} Predictions")
+        # Plot ensemble approaches with error bands
+        if idx == 0:
+            x = range(1, len(low_mean)+1)
+            
+            # Lowest Uncertainty
+            line_low, = ax.plot(x, low_mean, marker='o', markersize=3, 
+                                color='gray', label="_nolegend_")
+            
+            # Direct Averaging
+            line_avg, = ax.plot(x, avg_mean, marker='o', markersize=3, 
+                            color='k', label="_nolegend_")
+            
+            # Uncertainty-weighted Aggregation
+            line_agg, = ax.plot(x, agg_mean, marker='o', markersize=3, 
+                            color='#DC143C', label="_nolegend_")
+            
+            # Ground Truth
+            line_gc, = ax.plot(x, engagement_over_time, marker="o", markersize=3, 
+                            color="purple", label="_nolegend_")
+        else:
+            ax.plot(range(1, len(low_mean)+1), low_mean, 
+                    marker='o', markersize=3, color='gray', label="_nolegend_")
+            ax.plot(range(1, len(avg_mean)+1), avg_mean, 
+                    marker='o', markersize=3, color='k', label="_nolegend_")
+            ax.plot(range(1, len(agg_mean)+1), agg_mean, 
+                    marker='o', markersize=3, color='#DC143C', label="_nolegend_")
+            ax.plot(range(1, len(engagement_over_time) + 1),
+                    engagement_over_time, marker="o", markersize=3, 
+                    linestyle="-", color="purple", label="_nolegend_")
 
+        # Plot up to 2 models in each subplot
+        model1_idx = idx * 2
+        model2_idx = model1_idx + 1
 
-    plt.title("Mean enagement over time")
-    plt.xlabel("Weeks")
-    plt.ylabel("Proportion Engaged")
-    plt.legend()
-    plt.grid(True)
-    plt.savefig("engagement_over_time.png")
+        # First model in the pair
+        if model1_idx < len(models):
+            model_predictions = np.array(model_results[models[model1_idx]]["mean_predictions"])
+            mean_pred = np.mean(model_predictions, axis=1)            
+            x = range(1, len(mean_pred) + 1)
+            ax.plot(x, mean_pred, 
+                    marker="o", linestyle="-.", markersize=3, 
+                    color=colors[model1_idx], label=f"{model_labels[model1_idx]}")
+
+        # Second model in the pair
+        if model2_idx < len(models):
+            model_predictions = np.array(model_results[models[model2_idx]]["mean_predictions"])
+            mean_pred = np.mean(model_predictions, axis=1)
+            ax.plot(x, mean_pred,
+                    marker="o", linestyle="-.", markersize=3, 
+                    color=colors[model2_idx], label=f"{model_labels[model2_idx]}")
+
+        ax.set_ylabel("Proportion Engaged")
+        ax.set_title(labels[idx] + " Models")
+        ax.legend(loc='upper right', fontsize=9)
+        ax.grid(True)
+
+    axes[-1].set_xlabel("Weeks")
+    # fig.suptitle(f'', fontsize=16, y=0.99)
+    fig.subplots_adjust(top=0.85)
+    fig.legend([line_low, line_avg, line_agg, line_gc],
+               ["Lowest Uncertainty", "Direct Averaging", "Uncertainty-weighted Aggregation", "Ground Truth"],
+               loc="upper center", bbox_to_anchor=(0.5, 0.99), ncol=4, fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.95]) 
+    plt.savefig("plots/engagement_over_time_subplots.png")
     plt.show()
 
 

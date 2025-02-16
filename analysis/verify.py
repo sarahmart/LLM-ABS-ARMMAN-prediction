@@ -202,8 +202,8 @@ if __name__ == "__main__":
     #         separate_axes=True
     #     )
 
-    plot_engagement_over_time(args.models, args.labels, model_results, ground_truths, labels=None)
-
+    plot_engagement_over_time(args.models, args.labels, model_results, 
+                              ground_truths, P_combined, P_direct_avg, P_lowest_unc)
 
     # Bias analysis
 
@@ -271,10 +271,10 @@ if __name__ == "__main__":
     plot_df = pd.DataFrame(plot_data)
 
     plot_accuracy_by_feature(
-    df=plot_df,
-    metric='accuracy',
-    models=None,
-    figsize=(13, 5)
+        df=plot_df,
+        metric='accuracy',
+        model_labels=args.labels + ['Aggregated', 'Direct Average', 'Lowest Uncertainty'],
+        figsize=(13, 5)
     )
         
     # # Plot correct lowest-k selections for each model
