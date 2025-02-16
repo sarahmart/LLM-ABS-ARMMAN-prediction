@@ -7,116 +7,101 @@ import seaborn as sns
 
 
 def plot_performance_vs_month_new(months, *metrics, 
-                                  metric_agg, metric_avg, metric_low,
-                                  metric_name, model_labels=None, separate_axes=False):
-    """
-    Plot performance metric vs. month for multiple models and baselines, 
-    with an option to use subplots for adjacent pairs of models.
-
-    Args:
-    - months: List of months.
-    - *metrics: Metric values for each model (passed as separate arrays).
-    - metric_agg: Metric values for aggregated predictions.
-    - metric_avg: Metric values for direct averaging predictions.
-    - metric_low: Metric values for lowest uncertainty model.
-    - metric_name: Name of the metric (e.g., 'Accuracy', 'F1 Score', 'Log Likelihood').
-    - model_labels: List of labels for each model (default is 'Model 1', 'Model 2', ...).
-    - separate_axes: If True, create subplots for adjacent pairs of models.
-    """
-
+                                metric_agg, metric_avg, metric_low,
+                                metric_name, model_labels=None):
     if model_labels is None:
         model_labels = [f"Model {i+1}" for i in range(len(metrics))]
 
-    if not separate_axes:
-        # Plot all models on the same axes
+    # Create subplots for adjacent pairs of models
+    num_pairs = (len(metrics) + 1) // 2 
+    num_cols = 1
+    num_rows = math.ceil(num_pairs / num_cols)
 
-        plt.figure(figsize=(10, 6))
-        cmap = matplotlib.colormaps['Paired']  
-        colors = [cmap(i) for i in range(len(metrics))]
+    fig, axes = plt.subplots(num_rows, num_cols, 
+                            figsize=(10, 3 * num_rows), 
+                            sharey=False, sharex=True)
+    axes = axes.flatten()
+    cmap = matplotlib.colormaps['Paired']
+    colors = [cmap(i) for i in range(12)]
+    colors = [colors[i] for i in [0,1,2,3,7,6,8,9,4,5,10,11]]
+    labels = ['Google', 'OpenAI', 'Anthropic']
 
-        # Plot metrics for each model
-        for metric, label, color in zip(metrics, model_labels, colors):
-            plt.plot(months, metric, label=label, marker='o', linestyle='..', color=color, alpha=0.7)
+    # Variables to store line objects for the common legend
+    line_avg, line_low, line_agg = None, None, None
 
-        # Plot direct average performance
-        if any(metric_avg):
-            plt.plot(months, metric_avg, label='Direct Averaging', marker='o', color='purple')
+    for idx in range(num_pairs):
+        ax = axes[idx]
 
-        # Plot lowest uncertainty model performance
-        if any(metric_low):
-            plt.plot(months, metric_low, label='Lowest Uncertainty Model', marker='o', color='#DC143C')
+        model1_idx = idx * 2
+        metric1 = metrics[model1_idx]
+        label1 = model_labels[model1_idx]
+        ax.plot(months, metric1, label=label1, marker='o', markersize=3, 
+                linestyle='-.', color=colors[model1_idx], alpha=1)
 
-        # Plot aggregated performance
-        if any(metric_agg):
-            plt.plot(months, metric_agg, label='Uncertainty-weighted Aggregation', marker='o', linewidth=2.5, color='g')
+        if model1_idx < len(metrics)-1:
+            model2_idx = min(model1_idx + 1, len(metrics) - 1)  
+            metric2 = metrics[model2_idx]
+            label2 = model_labels[model2_idx]
+            ax.plot(months, metric2, label=label2, marker='o', markersize=3, 
+                    linestyle='-.', color=colors[model2_idx], alpha=1)
 
-        plt.xlabel("Week Since Program Start")
-        plt.ylabel(metric_name)
-        plt.title(f"{metric_name} vs. Week")
-        plt.legend()
-        plt.grid(True)
-        plt.savefig(f"{metric_name.replace(' ', '_').lower()}_vs_week.png")
-        plt.show()
-
-    else:
-        # Create subplots for adjacent pairs of models
-        num_pairs = (len(metrics) + 1) // 2 
-        num_cols = 1
-        num_rows = math.ceil(num_pairs / num_cols)
-
-        fig, axes = plt.subplots(num_rows, num_cols, 
-                                 figsize=(10, 3 * num_rows), 
-                                 sharey=False, sharex=True)
-        axes = axes.flatten()
-        cmap = matplotlib.colormaps['Paired']
-        colors = [cmap(i) for i in range(12)]
-        colors = [colors[i] for i in [0,1,2,3,6,7,8,9,4,5,10,11]]
-        labels = ['Google', 'OpenAI', 'Anthropic']
-
-        for idx in range(num_pairs):
-            ax = axes[idx]
-
-            model1_idx = idx * 2
-            metric1 = metrics[model1_idx]
-            label1 = model_labels[model1_idx]
-            ax.plot(months, metric1, label=label1, marker='o', markersize=3, linestyle='-.', color=colors[model1_idx], alpha=1)
-
-            if model1_idx <= len(metrics)-1: # else odd number of models
-                model2_idx = min(model1_idx + 1, len(metrics) - 1)  
-                metric2 = metrics[model2_idx]
-                label2 = model_labels[model2_idx]
-                ax.plot(months, metric2, label=label2, marker='o', markersize=3, linestyle='-.', color=colors[model2_idx], alpha=1)
-
-            # Plot direct average performance
-            if any(metric_avg):
-                ax.plot(months, metric_avg, label='Direct Averaging', 
-                        marker='o', markersize=3, color='k')
-
-            # Plot lowest uncertainty model performance
+        # Plot common lines without labels (except first plot to get line objects)
+        if idx == 0:
             if any(metric_low):
-                ax.plot(months, metric_low, label='Lowest Uncertainty', 
-                        marker='o', markersize=3, color='grey') 
-
-            # Plot aggregated performance
+                line_low, = ax.plot(months, metric_low, marker='o', markersize=3, 
+                                  color='grey', label='_nolegend_')
+            if any(metric_avg):
+                line_avg, = ax.plot(months, metric_avg, marker='o', markersize=3, 
+                                  color='k', label='_nolegend_')
             if any(metric_agg):
-                ax.plot(months, metric_agg, label='Uncertainty-weighted Aggregation', 
-                        marker='o', markersize=3, color='#DC143C') 
+                line_agg, = ax.plot(months, metric_agg, marker='o', markersize=3, 
+                                  color='#DC143C', label='_nolegend_')
+        else:
+            if any(metric_low):
+                ax.plot(months, metric_low, marker='o', markersize=3, 
+                       color='grey', label='_nolegend_')
+            if any(metric_avg):
+                ax.plot(months, metric_avg, marker='o', markersize=3, 
+                       color='k', label='_nolegend_')
+            if any(metric_agg):
+                ax.plot(months, metric_agg, marker='o', markersize=3, 
+                       color='#DC143C', label='_nolegend_')
 
-            # Subplot config
-            ax.set_ylabel(metric_name, fontsize=12)
-            ax.set_title(f"{labels[idx]}", fontsize=14)
-            ax.legend(fontsize=12, loc='lower left')
-            ax.grid(True, alpha=0.4)
-        axes[-1].set_xlabel("Weeks Since Program Start", fontsize=12)
-        # axes[-1].bbox_to_anchor = (1, 1)
+        # Subplot config
+        ax.set_ylabel(metric_name, fontsize=12)
+        ax.set_title(f"{labels[idx]} Models", fontsize=14)
+        ax.legend(fontsize=12, loc='upper right')  
+        ax.grid(True, alpha=0.4)
+    axes[-1].set_xlabel("Weeks Since Program Start", fontsize=12)
 
-        # Hide unused subplots
-        for idx in range(num_pairs, len(axes)):
-            axes[idx].set_visible(False)
+    # Hide unused subplots
+    for idx in range(num_pairs, len(axes)):
+        axes[idx].set_visible(False)
 
-        plt.tight_layout()
-        plt.savefig(f"{metric_name.replace(' ', '_').lower()}_vs_week_subplots.png")
-        plt.show()
+    # Add the common lines legend at the top
+    legend_elements = []
+    legend_labels = []
+    if line_low is not None:
+        legend_elements.append(line_low)
+        legend_labels.append("Lowest Uncertainty")
+    if line_avg is not None:
+        legend_elements.append(line_avg)
+        legend_labels.append("Direct Averaging")
+    if line_agg is not None:
+        legend_elements.append(line_agg)
+        legend_labels.append("Uncertainty-weighted Aggregation")
+
+    # Add top legend
+    if legend_elements:
+        fig.legend(legend_elements, legend_labels,
+                  loc='upper center', bbox_to_anchor=(0.5, 0.99),
+                  ncol=len(legend_elements), fontsize=12)
+        fig.subplots_adjust(top=0.85)
+
+    # fig.suptitle(f'', fontsize=16, y=0.99)
+    fig.tight_layout(rect=[0, 0, 1, 0.95]) 
+    plt.savefig(f"plots/{metric_name.replace(' ', '_').lower()}_vs_week_subplots.png")
+    plt.show()
 
 
 def plot_accuracy_by_feature(df, features=None, metric='accuracy', 
