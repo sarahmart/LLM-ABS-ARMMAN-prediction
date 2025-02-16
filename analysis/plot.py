@@ -119,7 +119,8 @@ def plot_performance_vs_month_new(months, *metrics,
         plt.show()
 
 
-def plot_accuracy_by_feature(features=None, df=None, metric='accuracy', models=None, figsize=(16, 13)):
+def plot_accuracy_by_feature(df, features=None, metric='accuracy', 
+                             models=None, model_labels=None, figsize=(10, 3)):
     
     if features is None: # default to all features in df
         features = df['feature'].unique()  
@@ -127,23 +128,35 @@ def plot_accuracy_by_feature(features=None, df=None, metric='accuracy', models=N
     if models is None: # default to all models in df
         models = df['model'].unique() 
 
+    if model_labels is None: # default to model names
+        model_labels = models
+
     # set up axes
     num_features = len(features)
     num_rows = math.ceil(num_features/2) 
     fig, axes = plt.subplots(num_rows, 2, figsize=(figsize[0], figsize[1] * num_rows), sharey=True)
     axes = axes.flatten() 
 
-    bar_width = 0.12
+    bar_width = 0.118
 
     for ax, feature in zip(axes, features):
 
         feature_df = df[df['feature'] == feature] 
         feature_categories = feature_df['category'].unique()
+        if feature == 'income':
+            feature_categories = [c.replace('income_', '') for c in feature_categories]
+        elif feature == 'age':
+            feature_categories = [c.replace('age_', '') for c in feature_categories]
+        elif feature == 'education':
+            feature_categories = [c.replace('education_', '') for c in feature_categories]
+        elif feature == 'language':
+            feature_categories = [c.replace('language_', '') for c in feature_categories]
+
         x = np.arange(len(feature_categories))  # mid x pos for categories
 
         cmap = matplotlib.colormaps['Paired']  
         colors = [cmap(i) for i in range(12)] 
-        model_colors = [colors[i] for i in [0,1,2,3,6]] + ['#DC143C', 'k', 'gray']
+        model_colors = [colors[i] for i in [0,1,2,3,7]] + ['#DC143C', 'k', 'gray']
         
         for i, model in enumerate(models):
             model_df = feature_df[feature_df['model'] == model]
@@ -158,30 +171,38 @@ def plot_accuracy_by_feature(features=None, df=None, metric='accuracy', models=N
 
             # plot bars w error bars
             bars = ax.bar(x_positions, to_plot.values, 
-                          yerr=std_dev.values, capsize=5, error_kw={'elinewidth': 0.1, 'alpha': 0.4, 'color': 'gray'},
-                          width=bar_width, label=model, alpha=1, 
-                          color=model_colors[i], edgecolor='black')
+                          yerr=std_dev.values, capsize=bar_width*20, error_kw={'elinewidth': 0.1, 'alpha': 0.5}, #, 'color': '#3b3b3b'},
+                          width=bar_width, label=model_labels[i], alpha=0.5, 
+                          color=model_colors[i])#, edgecolor='black')
 
-            # Print mean accuracy 
-            for bar in bars:
-                height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width() / 2, height+0.1, f'{height:.2f}', 
-                        ha='center', va='bottom', fontsize=9, color='black', rotation=90)
+            # # Print mean accuracy 
+            # for bar in bars:
+            #     height = bar.get_height()
+            #     ax.text(bar.get_x() + bar.get_width() / 2, height+0.09, f'{height:.1f}', 
+            #             ha='center', va='bottom', fontsize=9, color='black', rotation=90)
 
         ax.set_title(f'{metric.capitalize()} by {feature.capitalize()}', fontsize=14)
         ax.set_xlabel(feature.capitalize(), fontsize=12)
         ax.set_xticks(x + bar_width * (len(models) - 1) / 2) 
-        ax.set_xticklabels(feature_categories, rotation=70, fontsize=10)
-        ax.grid(axis='y', linestyle='--', alpha=0.7)
+        ax.set_xticklabels([f.capitalize() for f in feature_categories], rotation=10, fontsize=10)
+        ax.grid(axis='y', linestyle='--', alpha=0.5)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
 
     # Remove extra empty axes
     for ax in axes[num_features:]:
         ax.set_visible(False)
 
-    axes[0].set_ylabel(metric.capitalize(), fontsize=12) 
-    fig.legend(models, loc='upper center', bbox_to_anchor=(0.5, 0.5), ncol=len(models), fontsize=12)
-    fig.tight_layout()
-    # plt.savefig(f'plots/bias_by_feature_{metric}.png')
+    axes[0].set_ylabel(metric.capitalize(), fontsize=12)
+    axes[2].set_ylabel(metric.capitalize(), fontsize=12) 
+    fig.suptitle(f'Model {metric.capitalize()} by Feature', fontsize=16, y=0.99)
+    fig.legend(model_labels,
+            loc='upper center',
+            bbox_to_anchor=(0.5, 0.97), 
+            ncol=len(models)//2, 
+            fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.95]) 
+    plt.savefig(f'plots/bias_by_feature_{metric}.png')
     plt.show()
 
 
@@ -196,6 +217,10 @@ def plot_engagement_over_time(models, model_labels, model_results, ground_truths
     # Plot engagement over time
     plt.figure(figsize=(15, 6))
 
+    cmap = matplotlib.colormaps['Paired']
+    colors = [cmap(i) for i in range(12)]
+    colors = [colors[i] for i in [0,1,2,3,6,7,8,9,4,5,10,11]]
+
     # Plot Ground Truth Engagement
     plt.plot(range(1, len(engagement_over_time) + 1), engagement_over_time, 
             marker="o", markersize=5, linestyle="-", color="black", label="Ground Truth Engagement")
@@ -207,7 +232,8 @@ def plot_engagement_over_time(models, model_labels, model_results, ground_truths
         mean_engagement_predictions = np.mean(model_predictions, axis=1)  # avg  over all mothers
 
         plt.plot(range(1, len(mean_engagement_predictions) + 1), mean_engagement_predictions, 
-                    marker="o", linestyle="--", markersize=4, label=f"{model_labels[i]} Predictions")
+                    marker="o", linestyle="--", markersize=4, color=colors[i],
+                    label=f"{model_labels[i]} Predictions")
 
 
     plt.title("Mean enagement over time")
