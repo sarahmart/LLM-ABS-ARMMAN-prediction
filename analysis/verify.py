@@ -202,10 +202,8 @@ if __name__ == "__main__":
     #         separate_axes=True
     #     )
 
-    plot_engagement_over_time(args.models, model_results, ground_truths, labels=None)
+    plot_engagement_over_time(args.models, args.labels, model_results, ground_truths, labels=None)
 
-"""
-        # *model metrics
 
     # Bias analysis
 
@@ -278,7 +276,6 @@ if __name__ == "__main__":
     models=None,
     figsize=(13, 5)
     )
-"""
         
     # # Plot correct lowest-k selections for each model
     # model_predictions = {

@@ -185,7 +185,7 @@ def plot_accuracy_by_feature(features=None, df=None, metric='accuracy', models=N
     plt.show()
 
 
-def plot_engagement_over_time(models, model_results, ground_truths, labels=None):
+def plot_engagement_over_time(models, model_labels, model_results, ground_truths, labels=None):
 
     # mean engagement per week for ground truths --> transpose if shape is (num_weeks, num_mothers)
     if ground_truths.shape[0] < ground_truths.shape[1]: 
@@ -201,13 +201,13 @@ def plot_engagement_over_time(models, model_results, ground_truths, labels=None)
             marker="o", markersize=5, linestyle="-", color="black", label="Ground Truth Engagement")
 
     # Plot predicted engagement for each model
-    for model in models:
+    for i, model in enumerate(models):
         # mean engagement per week
         model_predictions = np.array(model_results[model]["mean_predictions"])  # (num_time_steps, num_mothers)
         mean_engagement_predictions = np.mean(model_predictions, axis=1)  # avg  over all mothers
 
         plt.plot(range(1, len(mean_engagement_predictions) + 1), mean_engagement_predictions, 
-                    marker="o", linestyle="--", markersize=4, label=f"{model} Predictions")
+                    marker="o", linestyle="--", markersize=4, label=f"{model_labels[i]} Predictions")
 
 
     plt.title("Mean enagement over time")
@@ -215,6 +215,7 @@ def plot_engagement_over_time(models, model_results, ground_truths, labels=None)
     plt.ylabel("Proportion Engaged")
     plt.legend()
     plt.grid(True)
+    plt.savefig("engagement_over_time.png")
     plt.show()
 
 
